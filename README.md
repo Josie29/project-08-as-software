@@ -7,6 +7,11 @@ Secure patient portal for ultrasound image and cine (multi-frame) viewing, signe
 delivery, time-limited secure sharing, and concurrency-safe appointment scheduling — all
 under first-class Protected Health Information (PHI) handling.
 
+## Quickstart
+
+_TBD — install, configure from `.env.example`, seed, run, and run the test suite
+(including the concurrency and leakage tests). Demo credentials listed here._
+
 ## Status
 
 Not started. Scaffolding, stack decisions, and setup instructions land here as the build
