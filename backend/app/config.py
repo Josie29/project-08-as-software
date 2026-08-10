@@ -43,7 +43,6 @@ class Settings(BaseSettings):
 
     supabase_url: str
     supabase_service_role_key: str
-    supabase_jwt_secret: str
     supabase_storage_bucket: str = "phi-assets"
 
     resend_api_key: str = ""
@@ -71,6 +70,19 @@ class Settings(BaseSettings):
         if isinstance(value, str):
             return [origin.strip() for origin in value.split(",") if origin.strip()]
         return value
+
+    @property
+    def supabase_jwks_url(self) -> str:
+        """Return the JWKS endpoint used to verify Supabase Auth tokens.
+
+        The project signs tokens with an asymmetric ES256 key, so the backend needs
+        only the public half — there is no shared secret to configure, and the backend
+        therefore cannot mint tokens even if compromised.
+
+        Returns:
+            The project's JWKS URL.
+        """
+        return f"{self.supabase_url}/auth/v1/.well-known/jwks.json"
 
     @property
     def sqlalchemy_url(self) -> str:

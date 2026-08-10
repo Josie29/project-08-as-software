@@ -38,6 +38,12 @@ seed-data/generated/
 *.db
 *.sqlite3
 
+# --- Agent tooling ---
+# Vendored third-party agent skills. skills-lock.json is tracked so they can be
+# restored with `npx skills add`, but the fetched content stays out of the tree.
+.agents/
+.claude/skills/
+
 # --- Tooling & OS ---
 .DS_Store
 Thumbs.db

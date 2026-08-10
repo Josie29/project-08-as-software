@@ -62,7 +62,13 @@ async def _check_storage(settings: Settings) -> DependencyStatus:
         `OK` if the bucket responds, `DEGRADED` otherwise.
     """
     url = f"{settings.supabase_url}/storage/v1/bucket/{settings.supabase_storage_bucket}"
-    headers = {"Authorization": f"Bearer {settings.supabase_service_role_key}"}
+    # Sent as `apikey` rather than a Bearer token: new-style `sb_secret_…` keys are not
+    # JWTs, and Storage rejects them as malformed if presented as Bearer. Both headers
+    # are sent so a legacy JWT `service_role` key keeps working too.
+    headers = {
+        "apikey": settings.supabase_service_role_key,
+        "Authorization": f"Bearer {settings.supabase_service_role_key}",
+    }
     try:
         async with httpx.AsyncClient(timeout=_DEPENDENCY_TIMEOUT_SECONDS) as client:
             response = await client.get(url, headers=headers)
