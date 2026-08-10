@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Ultrasound patient portal">
+  <title>Ultrasound patient portal</title>
+  <rect width="64" height="64" rx="14" fill="#0F766E"/>
+  <!-- translate(0,3) optically centres the mark: drawn at origin it leaves a 7px gap
+       above and 13px below. -->
+  <g transform="translate(0 3)">
+    <!-- Transducer head and sector beam are drawn as one connected silhouette: at 16px
+         a detached probe reads as an unrelated floating blob. -->
+    <rect x="26" y="7" width="12" height="8" rx="3" fill="#FFFFFF"/>
+    <!-- Sector beam: apex 32,11 / radius 40 / half-angle 40deg. -->
+    <path d="M32 11 L6.3 41.6 A40 40 0 0 0 57.7 41.6 Z" fill="#FFFFFF"/>
+    <!-- Anechoic structure in the beam — the motif that makes the mark read as
+         ultrasound rather than a generic cone. Degrades to faint texture at 16px. -->
+    <circle cx="32" cy="34" r="5.5" fill="#0F766E"/>
+  </g>
+</svg>
