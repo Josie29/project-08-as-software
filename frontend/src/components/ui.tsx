@@ -1,3 +1,4 @@
+import { forwardRef } from "react";
 import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from "react";
 
 /** Visual weight of a button. */
@@ -25,13 +26,10 @@ const BUTTON_TONES: Record<ButtonTone, string> = {
  * The minimum height is a deliberate floor, not decoration: every control has to stay
  * comfortably tappable on a phone, which the brief grades directly.
  */
-export function Button({
-  tone = "default",
-  size = "md",
-  block = false,
-  className = "",
-  ...props
-}: ButtonProps) {
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
+  { tone = "default", size = "md", block = false, className = "", ...props },
+  ref,
+) {
   const sizing =
     size === "sm" ? "min-h-[2.125rem] px-3 py-1 text-[0.8125rem]" : "min-h-[2.625rem] px-[1.125rem] py-2 text-sm";
   return (
@@ -44,10 +42,11 @@ export function Button({
         block ? "w-full" : "",
         className,
       ].join(" ")}
+      ref={ref}
       {...props}
     />
   );
-}
+});
 
 /** Semantic colour for status pills and alerts. */
 type Tone = "ok" | "warn" | "crit" | "mute" | "brand";

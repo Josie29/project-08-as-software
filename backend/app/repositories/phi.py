@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.audit import AuditLogEntry
 from app.models.enums import AuditAction, AuditActorType, StudyStatus
+from app.models.identity import Patient
 from app.models.imaging import Image, Study
 
 logger = structlog.get_logger(__name__)
@@ -30,6 +31,16 @@ class ImageSummary(BaseModel):
     width: int
     height: int
     has_thumbnail: bool
+
+
+class PatientProfile(BaseModel):
+    """The patient's own details, as shown in their portal header."""
+
+    display_name: str
+    account_id: str
+    # Masked at the source rather than in the UI: an unmasked date of birth should never
+    # cross the wire when only a confirmation cue is needed.
+    date_of_birth_masked: str
 
 
 class ImageAccess(BaseModel):
@@ -194,4 +205,28 @@ class PatientScope:
             if thumbnail and image.thumbnail_path
             else image.storage_path,
             thumbnail_path=image.thumbnail_path,
+        )
+
+    async def get_profile(self) -> PatientProfile | None:
+        """Return the patient's own identifying details.
+
+        Args:
+            None.
+
+        Returns:
+            The profile, or None if the record has disappeared.
+        """
+        row = (
+            await self._session.execute(
+                select(
+                    Patient.first_name, Patient.last_name, Patient.account_id, Patient.date_of_birth
+                ).where(Patient.id == self._patient_id)
+            )
+        ).first()
+        if row is None:
+            return None
+        return PatientProfile(
+            display_name=f"{row.first_name} {row.last_name}",
+            account_id=row.account_id,
+            date_of_birth_masked=f"\u2022\u2022\u2022\u2022-\u2022\u2022-{row.date_of_birth.day:02d}",
         )

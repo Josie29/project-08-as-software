@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from app.auth.dependencies import get_patient_scope
 from app.config import Settings, get_settings
-from app.repositories.phi import ImageSummary, PatientScope, StudySummary
+from app.repositories.phi import ImageSummary, PatientProfile, PatientScope, StudySummary
 from app.services.storage import ObjectStorage, StorageError, StorageObjectMissingError
 
 logger = structlog.get_logger(__name__)
@@ -28,6 +28,30 @@ def _not_found() -> HTTPException:
         The exception to raise.
     """
     return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=NOT_FOUND_MESSAGE)
+
+
+@router.get("/me", response_model=PatientProfile)
+async def get_my_profile(
+    scope: Annotated[PatientScope, Depends(get_patient_scope)],
+    response: Response,
+) -> PatientProfile:
+    """Return the caller's own identifying details for the portal header.
+
+    Args:
+        scope: The verified patient's scope.
+        response: Used to set cache headers.
+
+    Returns:
+        The patient's profile.
+
+    Raises:
+        HTTPException: 404 if the record no longer exists.
+    """
+    profile = await scope.get_profile()
+    if profile is None:
+        raise _not_found()
+    response.headers["Cache-Control"] = _NO_STORE
+    return profile
 
 
 @router.get("/studies", response_model=list[StudySummary])
