@@ -20,6 +20,8 @@ from asgi_lifespan import LifespanManager
 
 from app.main import app
 
+pytest_plugins = ["tests.support.tokens"]
+
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 
 #: Must survive truncation or the migration state is lost mid-run.

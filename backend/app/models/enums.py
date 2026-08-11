@@ -129,6 +129,8 @@ class AuditAction(StrEnum):
     IDENTITY_VERIFIED = "identity_verified"
     IDENTITY_FAILED = "identity_failed"
     IMAGE_VIEWED = "image_viewed"
+    IMAGE_ACCESS_DENIED = "image_access_denied"
+    STUDY_ACCESS_DENIED = "study_access_denied"
     CINE_VIEWED = "cine_viewed"
     REPORT_VIEWED = "report_viewed"
     SHARE_LINK_CREATED = "share_link_created"

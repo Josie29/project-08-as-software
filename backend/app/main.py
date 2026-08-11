@@ -1,12 +1,14 @@
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from uuid import uuid4
 
 import structlog
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, Request, Response, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api import health
+from app.api import health, identity, studies
 from app.config import get_settings
 from app.db import dispose_engine
 from app.logging import configure_logging
@@ -47,6 +49,66 @@ app.add_middleware(
 )
 
 app.include_router(health.router)
+app.include_router(identity.router)
+app.include_router(studies.router)
+
+
+@app.middleware("http")
+async def attach_request_id(request: Request, call_next: Callable[[Request], Awaitable[Response]]):
+    """Give every request an id shared by the application log and the audit log.
+
+    Correlating the two is what lets an access recorded in `audit_log` be traced back to the
+    request that caused it, without putting PHI in either.
+
+    Args:
+        request: The incoming request.
+        call_next: The rest of the middleware chain.
+
+    Returns:
+        The downstream response, carrying the request id.
+    """
+    request_id = request.headers.get("x-request-id") or uuid4().hex
+    request.state.request_id = request_id
+    structlog.contextvars.bind_contextvars(request_id=request_id)
+    try:
+        response = await call_next(request)
+    finally:
+        structlog.contextvars.unbind_contextvars("request_id")
+    response.headers["x-request-id"] = request_id
+    return response
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    """Return validation errors without echoing what was submitted.
+
+    FastAPI's default handler includes the offending value in `detail[].input`. On the
+    identity endpoint that would put a submitted date of birth straight into the response
+    body and any log that captured it.
+
+    Args:
+        request: The incoming request.
+        exc: The validation error.
+
+    Returns:
+        A field-level error report with all submitted values stripped.
+    """
+    logger.info("request.validation_failed", path=request.url.path)
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        content={
+            "detail": [
+                {
+                    "loc": error.get("loc", []),
+                    "msg": error.get("msg", "invalid"),
+                    "type": error.get("type", ""),
+                }
+                for error in exc.errors()
+            ]
+        },
+    )
 
 
 @app.exception_handler(Exception)
