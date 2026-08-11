@@ -19,7 +19,7 @@ alternatives: [docs/tech-stack.md](docs/tech-stack.md).
 |------|----------|
 | `backend/` | FastAPI service — API, ORM models, Alembic migrations, pytest suite |
 | `frontend/` | Next.js patient/provider UI |
-| `docs/` | Stack decisions and design notes |
+| `docs/` | Stack decisions ([tech-stack.md](docs/tech-stack.md)) and data model ([schema.md](docs/schema.md)) |
 | `docker-compose.yml` | Local Postgres used by the test suite only |
 | `.github/workflows/ci.yml` | Lint, type check, tests (backend) and lint, build (frontend) |
 
@@ -65,17 +65,20 @@ dependency is degraded so an uptime check can key off the status code alone.
 ## Environment variables
 
 Every variable is documented with a placeholder in [`.env.example`](.env.example).
-`SUPABASE_SERVICE_ROLE_KEY` and `SUPABASE_JWT_SECRET` are server-only secrets and must
-never reach the browser; only `NEXT_PUBLIC_*` values are exposed to the client.
+`SUPABASE_SERVICE_ROLE_KEY` is a server-only secret and must never reach the browser;
+only `NEXT_PUBLIC_*` values are exposed to the client. There is no JWT secret to
+configure — the project signs tokens with an asymmetric key, so the API verifies them
+against a JWKS URL derived from `SUPABASE_URL`.
 
 ## Status
 
-Scaffold complete — application skeleton, health check, structured PHI-safe logging,
-migrations wiring, local test database, and CI all run green. Schema, seed data, and
-feature work land next.
+Schema complete — 17 tables in one migration, applied to both local Postgres and
+Supabase. No-double-booking is enforced by a partial unique index and proven by a
+mutation-checked concurrency test. Seed data and feature work land next.
 
 - [x] Repo scaffold, CI, health check, PHI-redacting logger
-- [ ] Schema + migrations + seed script with synthetic imaging assets
+- [x] Schema + migrations (17 tables, [docs/schema.md](docs/schema.md))
+- [ ] Seed script with synthetic imaging assets
 - [ ] Priority 1 — identity verification, image viewing, cine playback, secure sharing
 - [ ] Priority 2 — signed-report viewing and secure sharing
 - [ ] Priority 3 — availability, booking, concurrency guard, reminders

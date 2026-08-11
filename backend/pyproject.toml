@@ -26,6 +26,7 @@ dev = [
     "asgi-lifespan>=2.1",
     "ruff>=0.8",
     "pyright>=1.1.390",
+    "asyncpg-stubs>=0.31.3",
 ]
 
 [tool.ruff]
