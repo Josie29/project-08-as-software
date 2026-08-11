@@ -1,0 +1,130 @@
+import "server-only";
+
+import { cookies } from "next/headers";
+import { createServerClient } from "@supabase/ssr";
+import { redirect } from "next/navigation";
+
+/**
+ * Server-side Supabase client bound to the request's cookies.
+ *
+ * `cookies()` is asynchronous in this version of Next, and writes are only permitted from
+ * a Server Function or Route Handler — hence the guarded `setAll`.
+ *
+ * @returns A server Supabase client.
+ */
+async function createServerSupabase() {
+  const cookieStore = await cookies();
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll: () => cookieStore.getAll(),
+        setAll: (toSet) => {
+          try {
+            toSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options));
+          } catch {
+            // Called from a Server Component, where cookies are read-only. The session is
+            // refreshed on the next Server Function or Route Handler instead.
+          }
+        },
+      },
+    },
+  );
+}
+
+/**
+ * Return the caller's access token, or redirect to the login screen.
+ *
+ * @returns The Supabase access token.
+ */
+export async function requireAccessToken(): Promise<string> {
+  const supabase = await createServerSupabase();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) redirect("/login");
+  return session.access_token;
+}
+
+/** A failed API call, carrying the status so callers can branch on 403 vs 404. */
+export class ApiError extends Error {
+  constructor(
+    readonly status: number,
+    readonly code?: string,
+  ) {
+    super(`API request failed with ${status}`);
+  }
+}
+
+/**
+ * Call the portal API on behalf of the signed-in patient.
+ *
+ * `no-store` is explicit rather than relying on the framework default: every response here
+ * is one patient's protected health information and must never be reused for another
+ * request or another person.
+ *
+ * @param path - API path beginning with a slash.
+ * @param init - Additional fetch options.
+ * @returns The parsed JSON body.
+ * @throws ApiError If the API returns a non-2xx status.
+ */
+export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const token = await requireAccessToken();
+  const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}${path}`, {
+    ...init,
+    cache: "no-store",
+    headers: {
+      ...init.headers,
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new ApiError(response.status, body?.detail?.code);
+  }
+  return (await response.json()) as T;
+}
+
+/** A study as shown in the patient's list. */
+export interface StudySummary {
+  id: string;
+  performed_at: string;
+  description: string | null;
+  image_count: number;
+}
+
+/** Image metadata for one study. */
+export interface ImageSummary {
+  id: string;
+  sequence: number;
+  width: number;
+  height: number;
+  has_thumbnail: boolean;
+}
+
+/**
+ * Fetch the caller's completed studies.
+ *
+ * @returns The studies, or null when identity verification is still required.
+ */
+export async function getStudies(): Promise<StudySummary[] | null> {
+  try {
+    return await apiFetch<StudySummary[]>("/studies");
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 403) return null;
+    throw error;
+  }
+}
+
+/**
+ * Fetch image metadata for one study.
+ *
+ * @param studyId - The study to list.
+ * @returns The study's images.
+ */
+export async function getStudyImages(studyId: string): Promise<ImageSummary[]> {
+  return apiFetch<ImageSummary[]>(`/studies/${studyId}/images`);
+}
