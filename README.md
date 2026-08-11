@@ -48,6 +48,38 @@ npm install
 npm run dev                           # http://localhost:3000
 ```
 
+**Seed**
+
+```bash
+cd backend
+uv run python -m app.seed                 # demo profile, ~12s
+uv run python -m app.seed --reset         # replace existing seeded data
+uv run python -m app.seed --profile full  # benchmark dataset (~11k assets, ~87 MB)
+```
+
+`--skip-assets` seeds rows only, `--dry-run` reports asset count and size without
+writing anything. Re-runs skip objects already in storage, so an interrupted upload
+resumes rather than starting over.
+
+### Demo accounts
+
+Password for all: `PortalDemo!2026`
+
+| Login | Role | Identity check |
+|---|---|---|
+| `patient@demo.test` | patient | account `AS-100241`, DOB `1991-06-24` |
+| `neighbour@demo.test` | patient | account `AS-100377`, DOB `1985-02-09` |
+| `provider@demo.test` | provider | — |
+| `admin@demo.test` | front-desk admin | — |
+
+Patient logins start **unverified** on purpose: the account exists, but it is not linked
+to a clinical record until the ID and date-of-birth check passes, so the identity flow is
+exercised rather than skipped.
+
+The demo patient carries a 100-frame cine clip, a clip with two frames deliberately
+missing, a signed report and a preliminary one that must stay hidden, and cancelled and
+future studies that must not appear in the patient's list.
+
 **Tests**
 
 The suite runs against a local throwaway Postgres, never the hosted database:
@@ -72,13 +104,14 @@ against a JWKS URL derived from `SUPABASE_URL`.
 
 ## Status
 
-Schema complete — 17 tables in one migration, applied to both local Postgres and
-Supabase. No-double-booking is enforced by a partial unique index and proven by a
-mutation-checked concurrency test. Seed data and feature work land next.
+Schema and seed complete. 17 tables in committed migrations, applied to local Postgres
+and Supabase, with no-double-booking enforced by a partial unique index and proven by a
+mutation-checked concurrency test. The demo profile seeds a working dataset in about
+twelve seconds. Priority 1 feature work is next.
 
 - [x] Repo scaffold, CI, health check, PHI-redacting logger
 - [x] Schema + migrations (17 tables, [docs/schema.md](docs/schema.md))
-- [ ] Seed script with synthetic imaging assets
+- [x] Seed script with synthetic imaging assets (demo and full profiles)
 - [ ] Priority 1 — identity verification, image viewing, cine playback, secure sharing
 - [ ] Priority 2 — signed-report viewing and secure sharing
 - [ ] Priority 3 — availability, booking, concurrency guard, reminders

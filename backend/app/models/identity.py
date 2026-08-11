@@ -50,7 +50,9 @@ class Staff(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
     __tablename__ = "staff"
 
-    auth_user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, unique=True)
+    # Nullable like patients.auth_user_id: a staff member exists as an employment record
+    # before their login is provisioned, and after it is revoked.
+    auth_user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), unique=True)
     provider_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("providers.id", ondelete="CASCADE"), nullable=False
     )

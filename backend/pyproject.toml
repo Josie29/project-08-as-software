@@ -16,6 +16,8 @@ dependencies = [
     "resend>=2.4",
     "structlog>=24.4",
     "python-multipart>=0.0.20",
+    "pillow>=12.3.0",
+    "numpy>=2.5.2",
 ]
 
 [dependency-groups]
