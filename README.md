@@ -23,6 +23,17 @@ alternatives: [docs/tech-stack.md](docs/tech-stack.md).
 | `docker-compose.yml` | Local Postgres used by the test suite only |
 | `.github/workflows/ci.yml` | Lint, type check, tests (backend) and lint, build (frontend) |
 
+## Live deployment
+
+| | |
+|---|---|
+| Patient portal | https://as-software-portal.vercel.app |
+| API | https://portal-api-production-ce88.up.railway.app |
+| Health | https://portal-api-production-ce88.up.railway.app/health |
+
+Both redeploy automatically on a push to `main` — Vercel from `frontend/`, Railway from
+`backend/`. Sign in with the demo credentials below.
+
 ## Quickstart
 
 Prerequisites: [uv](https://docs.astral.sh/uv/), Node 22+, Docker.
