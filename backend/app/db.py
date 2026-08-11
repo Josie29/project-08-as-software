@@ -45,8 +45,11 @@ def get_engine() -> AsyncEngine:
         _engine = create_async_engine(
             settings.sqlalchemy_url,
             pool_pre_ping=True,
-            pool_size=10,
-            max_overflow=10,
+            pool_size=settings.db_pool_size,
+            max_overflow=settings.db_max_overflow,
+            # Recycle before the pooler's own idle timeout so a checked-out connection is
+            # never one the far end has already dropped.
+            pool_recycle=1500,
         )
     return _engine
 

@@ -45,6 +45,13 @@ class Settings(BaseSettings):
     supabase_service_role_key: str
     supabase_storage_bucket: str = "phi-assets"
 
+    # Supabase's session-mode pooler caps a project at 15 concurrent clients. Exceeding it
+    # fails requests with EMAXCONNSESSION rather than queueing, so the engine's ceiling
+    # (pool_size + max_overflow) must stay below that with headroom for migrations and the
+    # seed script running alongside.
+    db_pool_size: int = Field(default=5, ge=1, le=20)
+    db_max_overflow: int = Field(default=5, ge=0, le=20)
+
     resend_api_key: str = ""
     resend_from_email: str = "noreply@example.com"
 
