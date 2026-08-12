@@ -1,16 +1,24 @@
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import structlog
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.audit import AuditLogEntry
-from app.models.enums import AuditAction, AuditActorType, ReportStatus, StudyStatus
+from app.models.enums import (
+    AuditAction,
+    AuditActorType,
+    ReportStatus,
+    ShareResourceType,
+    StudyStatus,
+)
 from app.models.identity import Patient
 from app.models.imaging import Image, Study
 from app.models.reports import Report
+from app.models.sharing import ShareLink
+from app.services.sharing import hash_token, mint_token
 
 logger = structlog.get_logger(__name__)
 
@@ -69,6 +77,25 @@ class ReportDetail(BaseModel):
     status: ReportStatus
     body: str
     signed_at: datetime | None
+
+
+class ShareRecord(BaseModel):
+    """A share link as the patient sees it. Never carries the token itself."""
+
+    id: UUID
+    resource_type: ShareResourceType
+    resource_id: UUID
+    recipient_email: str
+    expires_at: datetime
+    revoked_at: datetime | None
+    access_count: int
+
+
+class MintedShare(BaseModel):
+    """A newly created link. The raw token exists here and in the email, nowhere else."""
+
+    record: ShareRecord
+    token: str
 
 
 class ImageAccess(BaseModel):
@@ -316,3 +343,134 @@ class PatientScope:
             body=report.body,
             signed_at=report.signed_at,
         )
+
+    async def _owns_resource(self, resource_type: ShareResourceType, resource_id: UUID) -> bool:
+        """Check the patient owns a shareable resource, without recording a view.
+
+        Sharing is not reading, so this deliberately does not write a view audit entry —
+        the issuance entry is what belongs in the log.
+
+        Args:
+            resource_type: Whether the resource is an image or a report.
+            resource_id: The resource in question.
+
+        Returns:
+            True if the resource belongs to this patient and is shareable.
+        """
+        if resource_type is ShareResourceType.IMAGE:
+            found = await self._session.scalar(
+                select(Image.id)
+                .join(Study, Image.study_id == Study.id)
+                .where(
+                    Image.id == resource_id,
+                    Study.patient_id == self._patient_id,
+                    Study.status == StudyStatus.COMPLETED,
+                )
+            )
+        else:
+            found = await self._session.scalar(
+                select(Report.id).where(
+                    Report.id == resource_id,
+                    Report.patient_id == self._patient_id,
+                    Report.status.in_(PATIENT_VISIBLE_REPORT_STATUSES),
+                )
+            )
+        return found is not None
+
+    async def create_share(
+        self,
+        *,
+        resource_type: ShareResourceType,
+        resource_id: UUID,
+        recipient_email: str,
+        ttl_hours: int,
+    ) -> MintedShare | None:
+        """Mint a share link for a resource the patient owns.
+
+        Ownership is checked here rather than trusted from the request. A link created for
+        someone else's resource would be a permanent, unauthenticated cross-patient
+        capability — far worse than a single unauthorised read.
+
+        Args:
+            resource_type: Image or report.
+            resource_id: The resource to share.
+            recipient_email: Who the link is being sent to.
+            ttl_hours: How long the link stays valid.
+
+        Returns:
+            The new link and its raw token, or None if the resource is not theirs.
+        """
+        if not await self._owns_resource(resource_type, resource_id):
+            await self._record(AuditAction.SHARE_LINK_CREATED, resource_type.value, resource_id)
+            return None
+
+        token = mint_token()
+        link = ShareLink(
+            token_hash=hash_token(token),
+            resource_type=resource_type,
+            resource_id=resource_id,
+            created_by_patient_id=self._patient_id,
+            recipient_email=recipient_email,
+            expires_at=datetime.now(UTC) + timedelta(hours=ttl_hours),
+        )
+        self._session.add(link)
+        await self._session.flush()
+        await self._record(AuditAction.SHARE_LINK_CREATED, "share_link", link.id)
+
+        return MintedShare(record=_to_record(link), token=token)
+
+    async def list_shares(self) -> list[ShareRecord]:
+        """Return the links this patient has created, newest first.
+
+        Returns:
+            Their share links, active and past.
+        """
+        result = await self._session.execute(
+            select(ShareLink)
+            .where(ShareLink.created_by_patient_id == self._patient_id)
+            .order_by(ShareLink.created_at.desc())
+        )
+        return [_to_record(link) for link in result.scalars().all()]
+
+    async def revoke_share(self, share_id: UUID) -> bool:
+        """Switch off one of the patient's links.
+
+        Args:
+            share_id: The link to revoke.
+
+        Returns:
+            True if a live link was revoked, False if it is missing or not theirs.
+        """
+        result = await self._session.execute(
+            update(ShareLink)
+            .where(
+                ShareLink.id == share_id,
+                ShareLink.created_by_patient_id == self._patient_id,
+                ShareLink.revoked_at.is_(None),
+            )
+            .values(revoked_at=datetime.now(UTC))
+            .returning(ShareLink.id)
+        )
+        revoked = result.scalar_one_or_none() is not None
+        await self._record(AuditAction.SHARE_LINK_REVOKED, "share_link", share_id)
+        return revoked
+
+
+def _to_record(link: ShareLink) -> ShareRecord:
+    """Convert a stored link to the shape the patient sees.
+
+    Args:
+        link: The stored row.
+
+    Returns:
+        The record, without the token digest.
+    """
+    return ShareRecord(
+        id=link.id,
+        resource_type=link.resource_type,
+        resource_id=link.resource_id,
+        recipient_email=link.recipient_email,
+        expires_at=link.expires_at,
+        revoked_at=link.revoked_at,
+        access_count=link.access_count,
+    )

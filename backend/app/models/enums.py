@@ -137,6 +137,7 @@ class AuditAction(StrEnum):
     SHARE_LINK_CREATED = "share_link_created"
     SHARE_LINK_USED = "share_link_used"
     SHARE_LINK_REVOKED = "share_link_revoked"
+    SHARE_LINK_DENIED = "share_link_denied"
     APPOINTMENT_BOOKED = "appointment_booked"
     APPOINTMENT_RESCHEDULED = "appointment_rescheduled"
     APPOINTMENT_CANCELLED = "appointment_cancelled"
