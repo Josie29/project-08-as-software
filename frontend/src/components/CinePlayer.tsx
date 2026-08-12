@@ -93,6 +93,9 @@ export function CinePlayer({
 
     return () => {
       controller.abort();
+      // Bitmaps hold decoded pixel buffers the garbage collector does not account for —
+      // a hundred frames left open is memory the tab keeps until it is reloaded.
+      for (const bitmap of framesRef.current) bitmap?.close();
       framesRef.current = [];
     };
   }, [clip.id, clip.available_frame_count]);

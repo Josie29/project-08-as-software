@@ -50,7 +50,7 @@ export function gapAt(gaps: Gap[], sequence: number): Gap | null {
 }
 
 /** One decoded frame, or a known hole in the clip. */
-export type LoadedFrame = HTMLImageElement | null;
+export type LoadedFrame = ImageBitmap | null;
 
 /**
  * Fetch and decode a clip's frames in playback order.
@@ -59,6 +59,13 @@ export type LoadedFrame = HTMLImageElement | null;
  * they wait for, so frames are requested in the order they will be played, a few at a
  * time. Unavailable frames are skipped rather than requested — the manifest already says
  * the bytes are not there, and asking anyway would turn a known gap into a failed request.
+ *
+ * Frames are decoded with `createImageBitmap` rather than `HTMLImageElement.decode()`.
+ * `decode()` waits on the renderer, which Chrome suspends in a background tab: the image
+ * arrives, `complete` goes true, and the promise never settles — so a patient who switches
+ * tabs mid-load comes back to a clip stuck where they left it. `createImageBitmap` decodes
+ * off the render path and is unaffected. It also lets the fetch honour `signal`, which an
+ * `<img>` src assignment cannot.
  *
  * @param manifest - The clip manifest.
  * @param onFrame - Called as each frame decodes, with its position.
@@ -76,11 +83,15 @@ export async function loadFrames(
   async function worker(): Promise<void> {
     while (cursor < pending.length && !signal.aborted) {
       const sequence = pending[cursor++]!;
-      const image = new Image();
-      image.src = `/api/phi/cine/${manifest.id}/frames/${sequence}`;
       try {
-        await image.decode();
-        if (!signal.aborted) onFrame(sequence, image);
+        const response = await fetch(`/api/phi/cine/${manifest.id}/frames/${sequence}`, { signal });
+        if (!response.ok) throw new Error(`frame ${sequence} returned ${response.status}`);
+        const bitmap = await createImageBitmap(await response.blob());
+        if (signal.aborted) {
+          bitmap.close();
+          return;
+        }
+        onFrame(sequence, bitmap);
       } catch {
         // A frame the manifest promised but storage could not produce. Treated exactly
         // like a declared gap so playback degrades the same way instead of stalling.
