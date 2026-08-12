@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { ShareModal } from "@/components/ShareModal";
 import { Button } from "@/components/ui";
 import type { ImageSummary } from "@/lib/api";
 
@@ -35,6 +36,7 @@ export function ImageViewer({
   // Held in state rather than read off the ref: reading a ref during render is
   // unsafe under concurrent rendering, and the cursor is render output.
   const [isDragging, setIsDragging] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const closeRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
 
@@ -178,11 +180,20 @@ export function ImageViewer({
           <span className="mr-auto text-xs text-scan-dim">
             Drag to pan · scroll to zoom · arrow keys to change image
           </span>
-          <Button tone="scan" size="sm" disabled title="Available once secure sharing ships">
+          <Button tone="scan" size="sm" onClick={() => setSharing(true)}>
             Share
           </Button>
         </div>
       </div>
+
+      {sharing ? (
+        <ShareModal
+          resourceType="image"
+          resourceId={image.id}
+          label={`image ${index + 1}`}
+          onClose={() => setSharing(false)}
+        />
+      ) : null}
     </div>
   );
 }

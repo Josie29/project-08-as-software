@@ -1,15 +1,23 @@
+import { redirect } from "next/navigation";
+
 import { PortalFrame } from "@/components/PortalFrame";
-import { PreviewNotice } from "@/components/PreviewNotice";
 import { ShareList } from "@/components/ShareList";
 import { Eyebrow } from "@/components/ui";
-import { MOCK_SHARES } from "@/lib/mock";
+import { getShares } from "@/lib/api";
 
 export const fetchCache = "only-no-store";
 
 /** Links the patient has shared, with the ability to switch any of them off. */
-export default function SharesPage() {
+export default async function SharesPage() {
+  const shares = await getShares();
+  if (shares === null) redirect("/verify");
+
+  const active = shares.filter(
+    (share) => share.revoked_at === null && new Date(share.expires_at) > new Date(),
+  ).length;
+
   return (
-    <PortalFrame>
+    <PortalFrame counts={{ "/shares": active }}>
       <div className="grid gap-1.5">
         <Eyebrow>Secure sharing</Eyebrow>
         <h1 className="text-2xl">Links you&rsquo;ve shared</h1>
@@ -19,12 +27,7 @@ export default function SharesPage() {
         </p>
       </div>
 
-      <PreviewNotice>
-        The sharing API is not built yet. These links are examples, and switching one off
-        changes only what you see on this page.
-      </PreviewNotice>
-
-      <ShareList initial={MOCK_SHARES} />
+      <ShareList initial={shares} />
     </PortalFrame>
   );
 }

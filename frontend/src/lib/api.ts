@@ -166,3 +166,36 @@ export async function getReports(): Promise<ReportSummary[] | null> {
 export async function getReport(reportId: string): Promise<ReportDetail> {
   return apiFetch<ReportDetail>(`/reports/${reportId}`);
 }
+
+/** A share link as the patient sees it. Never carries the token. */
+export interface ShareRecord {
+  id: string;
+  resource_type: "image" | "report";
+  resource_id: string;
+  recipient_email: string;
+  expires_at: string;
+  revoked_at: string | null;
+  access_count: number;
+}
+
+/** The response to minting a link. The token appears here once. */
+export interface CreatedShare {
+  share: ShareRecord;
+  link: string;
+  email_sent: boolean;
+  email_error: string | null;
+}
+
+/**
+ * Fetch the links this patient has created.
+ *
+ * @returns Their links, or null when identity verification is still required.
+ */
+export async function getShares(): Promise<ShareRecord[] | null> {
+  try {
+    return await apiFetch<ShareRecord[]>("/shares");
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 403) return null;
+    throw error;
+  }
+}
