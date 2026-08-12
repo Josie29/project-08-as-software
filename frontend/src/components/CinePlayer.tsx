@@ -72,7 +72,15 @@ export function CinePlayer({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     const context = canvasRef.current?.getContext("2d");
-    if (!context || gap) return;
+    if (!context) return;
+    if (gap) {
+      // Clear rather than leave the previous frame on screen. A stale image behind the
+      // gap notice reads as though the missing frame has content, which misrepresents
+      // the study — the whole point of surfacing the gap.
+      context.fillStyle = "#0b0614";
+      context.fillRect(0, 0, context.canvas.width, context.canvas.height);
+      return;
+    }
     drawFrame(context, frame);
   }, [frame, gap]);
 
@@ -145,7 +153,7 @@ export function CinePlayer({ onClose }: { onClose: () => void }) {
           {gap ? (
             <>
               <div className="absolute inset-0 grid place-items-center px-6 text-center">
-                <span className="font-mono text-sm text-scan-dim">
+                <span className="font-mono text-sm text-scan-ink">
                   Frame {String(frame + 1).padStart(3, "0")} unavailable
                 </span>
               </div>
