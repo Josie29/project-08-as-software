@@ -22,10 +22,10 @@ router = APIRouter(tags=["imaging"])
 NOT_FOUND_MESSAGE = "Not found."
 
 #: PHI must never be stored by a shared cache, and never persisted by the browser.
-_NO_STORE = "private, no-store, max-age=0"
+NO_STORE = "private, no-store, max-age=0"
 
 
-def _not_found() -> HTTPException:
+def not_found() -> HTTPException:
     """Build the single 404 used for both missing and foreign resources.
 
     Returns:
@@ -53,8 +53,8 @@ async def get_my_profile(
     """
     profile = await scope.get_profile()
     if profile is None:
-        raise _not_found()
-    response.headers["Cache-Control"] = _NO_STORE
+        raise not_found()
+    response.headers["Cache-Control"] = NO_STORE
     return profile
 
 
@@ -72,7 +72,7 @@ async def list_studies(
     Returns:
         The patient's completed studies, newest first.
     """
-    response.headers["Cache-Control"] = _NO_STORE
+    response.headers["Cache-Control"] = NO_STORE
     return await scope.list_completed_studies()
 
 
@@ -97,8 +97,8 @@ async def list_study_images(
     """
     images = await scope.list_images(study_id)
     if images is None:
-        raise _not_found()
-    response.headers["Cache-Control"] = _NO_STORE
+        raise not_found()
+    response.headers["Cache-Control"] = NO_STORE
     return images
 
 
@@ -121,7 +121,7 @@ async def _serve_image(
     """
     access = await scope.open_image(image_id, thumbnail=thumbnail)
     if access is None:
-        raise _not_found()
+        raise not_found()
 
     try:
         content = await storage.download(access.storage_path)
@@ -129,7 +129,7 @@ async def _serve_image(
         # The row exists and is owned by the caller, but the object is gone. Reported as
         # not found rather than as a server error, and logged for follow-up.
         logger.warning("imaging.object_missing", image_uuid=str(image_id))
-        raise _not_found() from exc
+        raise not_found() from exc
     except StorageError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -139,7 +139,7 @@ async def _serve_image(
     return Response(
         content=content,
         media_type="image/jpeg",
-        headers={"Cache-Control": _NO_STORE},
+        headers={"Cache-Control": NO_STORE},
     )
 
 

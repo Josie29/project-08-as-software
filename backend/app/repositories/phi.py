@@ -7,9 +7,10 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.audit import AuditLogEntry
-from app.models.enums import AuditAction, AuditActorType, StudyStatus
+from app.models.enums import AuditAction, AuditActorType, ReportStatus, StudyStatus
 from app.models.identity import Patient
 from app.models.imaging import Image, Study
+from app.models.reports import Report
 
 logger = structlog.get_logger(__name__)
 
@@ -41,6 +42,33 @@ class PatientProfile(BaseModel):
     # Masked at the source rather than in the UI: an unmasked date of birth should never
     # cross the wire when only a confirmation cue is needed.
     date_of_birth_masked: str
+
+
+#: The only report states a patient may see. A preliminary read belongs to the care team
+#: until a radiologist signs it (Core #7), so it is excluded in SQL rather than filtered
+#: out later — there is then no code path that could serve one.
+PATIENT_VISIBLE_REPORT_STATUSES = (ReportStatus.FINAL, ReportStatus.AMENDED)
+
+
+class ReportSummary(BaseModel):
+    """A report as it appears in the patient's list."""
+
+    id: UUID
+    study_id: UUID
+    title: str
+    status: ReportStatus
+    signed_at: datetime | None
+
+
+class ReportDetail(BaseModel):
+    """A full report, including its body."""
+
+    id: UUID
+    study_id: UUID
+    title: str
+    status: ReportStatus
+    body: str
+    signed_at: datetime | None
 
 
 class ImageAccess(BaseModel):
@@ -229,4 +257,62 @@ class PatientScope:
             display_name=f"{row.first_name} {row.last_name}",
             account_id=row.account_id,
             date_of_birth_masked=f"\u2022\u2022\u2022\u2022-\u2022\u2022-{row.date_of_birth.day:02d}",
+        )
+
+    async def list_signed_reports(self) -> list[ReportSummary]:
+        """Return the patient's signed reports, newest first.
+
+        Returns:
+            Reports the patient is permitted to read.
+        """
+        result = await self._session.execute(
+            select(Report)
+            .where(
+                Report.patient_id == self._patient_id,
+                Report.status.in_(PATIENT_VISIBLE_REPORT_STATUSES),
+            )
+            .order_by(Report.signed_at.desc())
+        )
+        return [
+            ReportSummary(
+                id=report.id,
+                study_id=report.study_id,
+                title=report.title,
+                status=report.status,
+                signed_at=report.signed_at,
+            )
+            for report in result.scalars().all()
+        ]
+
+    async def open_report(self, report_id: UUID) -> ReportDetail | None:
+        """Authorise a report read and record it.
+
+        Args:
+            report_id: The report requested.
+
+        Returns:
+            The report, or None if it is missing, unsigned, or another patient's.
+        """
+        report = (
+            await self._session.execute(
+                select(Report).where(
+                    Report.id == report_id,
+                    Report.patient_id == self._patient_id,
+                    Report.status.in_(PATIENT_VISIBLE_REPORT_STATUSES),
+                )
+            )
+        ).scalar_one_or_none()
+
+        if report is None:
+            await self._record(AuditAction.REPORT_ACCESS_DENIED, "report", report_id)
+            return None
+
+        await self._record(AuditAction.REPORT_VIEWED, "report", report.id)
+        return ReportDetail(
+            id=report.id,
+            study_id=report.study_id,
+            title=report.title,
+            status=report.status,
+            body=report.body,
+            signed_at=report.signed_at,
         )

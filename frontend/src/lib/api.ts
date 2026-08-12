@@ -128,3 +128,41 @@ export async function getStudies(): Promise<StudySummary[] | null> {
 export async function getStudyImages(studyId: string): Promise<ImageSummary[]> {
   return apiFetch<ImageSummary[]>(`/studies/${studyId}/images`);
 }
+
+/** A report as it appears in the patient's list. */
+export interface ReportSummary {
+  id: string;
+  study_id: string;
+  title: string;
+  status: "final" | "amended";
+  signed_at: string | null;
+}
+
+/** A full report, including its body. */
+export interface ReportDetail extends ReportSummary {
+  body: string;
+}
+
+/**
+ * Fetch the caller's signed reports.
+ *
+ * @returns The reports, or null when identity verification is still required.
+ */
+export async function getReports(): Promise<ReportSummary[] | null> {
+  try {
+    return await apiFetch<ReportSummary[]>("/reports");
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 403) return null;
+    throw error;
+  }
+}
+
+/**
+ * Fetch one signed report in full.
+ *
+ * @param reportId - The report to read.
+ * @returns The report.
+ */
+export async function getReport(reportId: string): Promise<ReportDetail> {
+  return apiFetch<ReportDetail>(`/reports/${reportId}`);
+}

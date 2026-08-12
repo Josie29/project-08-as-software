@@ -133,6 +133,7 @@ class AuditAction(StrEnum):
     STUDY_ACCESS_DENIED = "study_access_denied"
     CINE_VIEWED = "cine_viewed"
     REPORT_VIEWED = "report_viewed"
+    REPORT_ACCESS_DENIED = "report_access_denied"
     SHARE_LINK_CREATED = "share_link_created"
     SHARE_LINK_USED = "share_link_used"
     SHARE_LINK_REVOKED = "share_link_revoked"
