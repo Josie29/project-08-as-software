@@ -1,7 +1,10 @@
+from typing import Annotated
+
 import httpx
 import structlog
+from fastapi import Depends
 
-from app.config import Settings
+from app.config import Settings, get_settings
 
 logger = structlog.get_logger(__name__)
 
@@ -72,8 +75,11 @@ class ObjectStorage:
         return response.content
 
 
-def get_object_storage(settings: Settings) -> ObjectStorage:
-    """Build an object storage client.
+def get_object_storage(settings: Annotated[Settings, Depends(get_settings)]) -> ObjectStorage:
+    """FastAPI dependency supplying the object storage client.
+
+    Injected rather than constructed inside the route so tests can substitute a stub and
+    exercise the delivery path without reaching the network.
 
     Args:
         settings: Application settings.

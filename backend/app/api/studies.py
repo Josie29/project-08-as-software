@@ -5,9 +5,13 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from app.auth.dependencies import get_patient_scope
-from app.config import Settings, get_settings
 from app.repositories.phi import ImageSummary, PatientProfile, PatientScope, StudySummary
-from app.services.storage import ObjectStorage, StorageError, StorageObjectMissingError
+from app.services.storage import (
+    ObjectStorage,
+    StorageError,
+    StorageObjectMissingError,
+    get_object_storage,
+)
 
 logger = structlog.get_logger(__name__)
 router = APIRouter(tags=["imaging"])
@@ -99,14 +103,14 @@ async def list_study_images(
 
 
 async def _serve_image(
-    image_id: UUID, scope: PatientScope, settings: Settings, *, thumbnail: bool
+    image_id: UUID, scope: PatientScope, storage: ObjectStorage, *, thumbnail: bool
 ) -> Response:
     """Authorise, audit, and return one image's bytes.
 
     Args:
         image_id: The image requested.
         scope: The verified patient's scope.
-        settings: Application settings.
+        storage: Object storage client.
         thumbnail: Whether to serve the thumbnail.
 
     Returns:
@@ -119,7 +123,6 @@ async def _serve_image(
     if access is None:
         raise _not_found()
 
-    storage = ObjectStorage(settings)
     try:
         content = await storage.download(access.storage_path)
     except StorageObjectMissingError as exc:
@@ -144,35 +147,35 @@ async def _serve_image(
 async def get_image(
     image_id: UUID,
     scope: Annotated[PatientScope, Depends(get_patient_scope)],
-    settings: Annotated[Settings, Depends(get_settings)],
+    storage: Annotated[ObjectStorage, Depends(get_object_storage)],
 ) -> Response:
     """Serve one full-size image.
 
     Args:
         image_id: The image requested.
         scope: The verified patient's scope.
-        settings: Application settings.
+        storage: Object storage client.
 
     Returns:
         The image bytes.
     """
-    return await _serve_image(image_id, scope, settings, thumbnail=False)
+    return await _serve_image(image_id, scope, storage, thumbnail=False)
 
 
 @router.get("/images/{image_id}/thumbnail")
 async def get_image_thumbnail(
     image_id: UUID,
     scope: Annotated[PatientScope, Depends(get_patient_scope)],
-    settings: Annotated[Settings, Depends(get_settings)],
+    storage: Annotated[ObjectStorage, Depends(get_object_storage)],
 ) -> Response:
     """Serve one image's thumbnail.
 
     Args:
         image_id: The image requested.
         scope: The verified patient's scope.
-        settings: Application settings.
+        storage: Object storage client.
 
     Returns:
         The thumbnail bytes.
     """
-    return await _serve_image(image_id, scope, settings, thumbnail=True)
+    return await _serve_image(image_id, scope, storage, thumbnail=True)

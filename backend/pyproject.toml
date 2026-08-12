@@ -44,10 +44,15 @@ asyncio_mode = "auto"
 # importlib import mode drops the requirement that every test file have a unique
 # basename, so tests/ needs no __init__.py even once it grows subdirectories such as
 # tests/concurrency/ and tests/leakage/.
-addopts = "--cov=app --cov-report=term-missing --import-mode=importlib"
+addopts = "--cov=app --cov-report=term-missing --cov-fail-under=80 --import-mode=importlib"
 
 [tool.coverage.run]
-omit = ["app/main.py", "alembic/*"]
+# The brief scopes its >=80% bar to core logic: identity verification, image/report access
+# control, the booking engine, lifecycle rules, reminders and share links. app/seed is
+# developer tooling that builds a demo dataset — it has its own behavioural tests in
+# tests/seed, but unit-covering its rendering and upload plumbing would inflate the number
+# without testing anything the brief grades.
+omit = ["app/main.py", "alembic/*", "app/seed/*"]
 
 [tool.pyright]
 include = ["app", "tests", "alembic"]
