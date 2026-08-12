@@ -37,8 +37,15 @@ export default function ActivityPage() {
           </div>
         ) : (
           /* The table scrolls inside its own container so a phone never scrolls the page
-             sideways. */
-          <div className="overflow-x-auto">
+             sideways. The container is focusable and labelled as a region because a scroll
+             box that only responds to a pointer is content a keyboard user cannot reach the
+             right-hand end of. */
+          <div
+            className="overflow-x-auto"
+            tabIndex={0}
+            role="region"
+            aria-label="Access log entries, scrollable"
+          >
             <table className="w-full border-collapse text-[0.8125rem]">
               <thead>
                 <tr>

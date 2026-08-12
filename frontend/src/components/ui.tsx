@@ -16,7 +16,10 @@ const BUTTON_TONES: Record<ButtonTone, string> = {
   ghost: "bg-transparent border-transparent text-ink hover:bg-brand-tint",
   danger: "bg-panel border-line text-ink hover:border-crit hover:text-crit",
   scan: "bg-transparent border-scan-line text-scan-ink hover:border-scan-accent hover:text-scan-accent",
-  scanPrimary: "bg-brand border-brand text-white hover:bg-brand-light",
+  // Hardcoded white failed twice over: it sat on the light violet the brand token becomes
+  // in dark mode, and on the light hover fill in day mode. brand-ink is the token that
+  // flips with the surface, which is the whole reason it exists.
+  scanPrimary: "bg-brand border-brand text-brand-ink hover:bg-brand-deep hover:border-brand-deep",
 };
 
 /**

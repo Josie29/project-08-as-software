@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ShareModal } from "@/components/ShareModal";
 import { Button } from "@/components/ui";
 import type { ImageSummary } from "@/lib/api";
+import { useDialog } from "@/lib/useDialog";
 
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 4;
@@ -49,13 +50,13 @@ export function ImageViewer({
     setFailed(false);
   }, []);
 
-  useEffect(() => {
-    closeRef.current?.focus();
-  }, []);
+  // Stands down while the share dialog is open, so Escape dismisses that rather than the
+  // viewer underneath it.
+  useDialog(dialogRef, onClose, !sharing, closeRef);
 
   useEffect(() => {
+    if (sharing) return;
     function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
       if (event.key === "ArrowRight" && index < images.length - 1) {
         setIndex(index + 1);
         reset();
@@ -64,27 +65,10 @@ export function ImageViewer({
         setIndex(index - 1);
         reset();
       }
-      // Focus is kept inside the dialog: tabbing out of a modal leaves a keyboard user
-      // interacting with a page they cannot see.
-      if (event.key === "Tab" && dialogRef.current) {
-        const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
-          "button, [href], input, select, [tabindex]:not([tabindex='-1'])",
-        );
-        if (focusable.length === 0) return;
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-        if (!event.shiftKey && document.activeElement === last) {
-          event.preventDefault();
-          first.focus();
-        } else if (event.shiftKey && document.activeElement === first) {
-          event.preventDefault();
-          last.focus();
-        }
-      }
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [index, images.length, onClose, reset]);
+  }, [index, images.length, reset, sharing]);
 
   function applyZoom(next: number) {
     const clamped = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, next));

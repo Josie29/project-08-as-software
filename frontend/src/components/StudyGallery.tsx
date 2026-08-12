@@ -62,7 +62,10 @@ export function StudyGallery({ studies }: { studies: StudyWithImages[] }) {
             {images.length === 0 && clips.length === 0 ? (
               <EmptyState>Images appear here once this visit is complete.</EmptyState>
             ) : (
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-3.5">
+              /* 7.5rem rather than 9rem: at 375px the wider track fell one pixel short of
+                 two columns, so a study of eleven images became a single column and a page
+                 five thousand pixels tall. */
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(7.5rem,1fr))] gap-3.5">
                 {images.map((image, index) => (
                   <Thumb
                     key={image.id}

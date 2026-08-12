@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui";
 import type { CineClipSummary, CineManifest } from "@/lib/api";
 import { FPS_OPTIONS, type Gap, type LoadedFrame, findGaps, gapAt, loadFrames } from "@/lib/cine";
+import { isFromFormControl, useDialog, usePrefersReducedMotion } from "@/lib/useDialog";
 
 const STAGE_WIDTH = 640;
 const STAGE_HEIGHT = 480;
@@ -31,6 +32,13 @@ export function CinePlayer({
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  // A clip that starts looping on its own is exactly the motion this preference asks us
+  // not to produce. The transport is untouched — playback is a keypress away.
+  const reducedMotion = usePrefersReducedMotion();
+  // Mirrored so the loader reads the current preference without listing it as a dependency
+  // — a change mid-view would otherwise abort and refetch the whole clip.
+  const reducedMotionRef = useRef(reducedMotion);
 
   const [manifest, setManifest] = useState<CineManifest | null>(null);
   const [gaps, setGaps] = useState<Gap[]>([]);
@@ -81,7 +89,7 @@ export function CinePlayer({
           framesRef.current[sequence] = image;
           ready += 1;
           setReadyCount(ready);
-          if (ready >= threshold) setPlaying(true);
+          if (ready >= threshold && !reducedMotionRef.current) setPlaying(true);
         },
         controller.signal,
       );
@@ -106,6 +114,9 @@ export function CinePlayer({
   const fpsRef = useRef(fps);
   const playingRef = useRef(playing);
   const countRef = useRef(frameCount);
+  useEffect(() => {
+    reducedMotionRef.current = reducedMotion;
+  }, [reducedMotion]);
   useEffect(() => {
     fpsRef.current = fps;
   }, [fps]);
@@ -156,19 +167,19 @@ export function CinePlayer({
     context.drawImage(image, 0, 0, context.canvas.width, context.canvas.height);
   }, [frame, readyCount]);
 
-  useEffect(() => {
-    closeRef.current?.focus();
-  }, []);
-
   const step = useCallback((delta: number) => {
     // Stepping is a deliberate act, so it pauses rather than fighting playback.
     setPlaying(false);
     setFrame((current) => (current + delta + countRef.current) % countRef.current);
   }, []);
 
+  useDialog(dialogRef, onClose, true, closeRef);
+
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
+      // Space and the arrows belong to whatever control has focus. Claiming them for the
+      // transport makes every button and the scrubber unusable by keyboard.
+      if (isFromFormControl(event)) return;
       if (event.key === " ") {
         event.preventDefault();
         setPlaying((value) => !value);
@@ -178,7 +189,7 @@ export function CinePlayer({
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [onClose, step]);
+  }, [step]);
 
   return (
     <div
@@ -188,6 +199,7 @@ export function CinePlayer({
       }}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label={`Cine clip viewer, ${label}`}

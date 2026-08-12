@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { Alert, Button, Field, TextInput } from "@/components/ui";
 import type { CreatedShare } from "@/lib/api";
+import { useDialog } from "@/lib/useDialog";
 
 const TTL_OPTIONS = [24, 48, 72] as const;
 
@@ -33,18 +34,9 @@ export function ShareModal({
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<CreatedShare | null>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    closeRef.current?.focus();
-  }, []);
-
-  useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  useDialog(dialogRef, onClose, true, closeRef);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -85,6 +77,7 @@ export function ShareModal({
       }}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label={`Share ${label}`}

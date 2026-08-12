@@ -17,7 +17,10 @@
 
   --ink: #1a202c;
   --ink-2: #4a5568;
-  --ink-3: #718096;
+  /* Darker than it looks like it wants to be. The muted tone is used for hints and meta
+     text at 10-12px, and the lighter grey it started as measured 3.65:1 on the page
+     ground — below AA, on exactly the text that is already hardest to read. */
+  --ink-3: #5f6c7f;
 
   --brand: #873fe0;
   --brand-deep: #7a00df;
@@ -29,7 +32,7 @@
   /* Semantics are tuned to sit beside violet rather than compete with it. */
   --ok: #0d7a5f;
   --ok-bg: #e0f3ee;
-  --warn: #a35c00;
+  --warn: #9a5600;
   --warn-bg: #fbeedb;
   --crit: #c02840;
   --crit-bg: #fce8ec;
@@ -40,7 +43,9 @@
   --scan-chrome: #1a0f2b;
   --scan-line: #2e1f47;
   --scan-ink: #c7b9dd;
-  --scan-dim: #8272a3;
+  /* Reads against both imaging surfaces. The dimmer value it started as cleared the black
+     stage but not the chrome around it, which is where the transport hints live. */
+  --scan-dim: #8b7bab;
   --scan-accent: #c39eef;
 
   --shadow-sm: 0 1px 2px rgb(26 32 44 / 0.06);
