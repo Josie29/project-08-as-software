@@ -110,13 +110,23 @@ export function ImageViewer({
           <h2 className="mr-auto text-sm font-bold tracking-[-0.01em] text-white">
             IMG-{String(index + 1).padStart(4, "0")}
           </h2>
-          <Button tone="scan" size="sm" onClick={() => applyZoom(zoom - ZOOM_STEP)} aria-label="Zoom out">
+          <Button
+            tone="scan"
+            size="sm"
+            onClick={() => applyZoom(zoom - ZOOM_STEP)}
+            aria-label="Zoom out"
+          >
             −
           </Button>
           <span className="min-w-[3.5rem] text-center font-mono text-[0.8125rem] text-scan-accent">
             {Math.round(zoom * 100)}%
           </span>
-          <Button tone="scan" size="sm" onClick={() => applyZoom(zoom + ZOOM_STEP)} aria-label="Zoom in">
+          <Button
+            tone="scan"
+            size="sm"
+            onClick={() => applyZoom(zoom + ZOOM_STEP)}
+            aria-label="Zoom in"
+          >
             +
           </Button>
           <Button tone="scan" size="sm" onClick={reset}>

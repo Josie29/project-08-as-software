@@ -15,14 +15,14 @@ export default function ActivityPage() {
         <Eyebrow>Compliance</Eyebrow>
         <h1 className="text-2xl">Access log</h1>
         <p className="max-w-[44rem] text-[0.9375rem] text-ink-2">
-          Every time your images or report are opened, it is written here — including attempts
-          that were refused. Entries can only be added, never edited or removed.
+          Every time your images or report are opened, it is written here — including attempts that
+          were refused. Entries can only be added, never edited or removed.
         </p>
       </div>
 
       <PreviewNotice>
-        The access-log API is not built yet, so these entries are examples. The real log is
-        already being written server-side on every access.
+        The access-log API is not built yet, so these entries are examples. The real log is already
+        being written server-side on every access.
       </PreviewNotice>
 
       <Card>

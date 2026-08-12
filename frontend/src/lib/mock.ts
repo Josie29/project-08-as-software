@@ -26,8 +26,7 @@ export const MOCK_SIGNED_REPORT = {
     { label: "Accession", value: "8841-02" },
     { label: "Gestational age", value: "20w 3d" },
   ],
-  indication:
-    "Routine second-trimester anatomic survey. Singleton intrauterine pregnancy.",
+  indication: "Routine second-trimester anatomic survey. Singleton intrauterine pregnancy.",
   measurements: [
     { label: "Biparietal diameter", value: "5.21 cm · 48th pct" },
     { label: "Head circumference", value: "18.40 cm" },

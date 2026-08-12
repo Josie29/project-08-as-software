@@ -48,8 +48,8 @@ export default function LoginPage() {
             <h1 className="text-2xl">Sign in</h1>
           </div>
           <p className="text-[0.9375rem] text-ink-2">
-            Use the email address your clinic has on file. After signing in you will confirm
-            your identity before any images open.
+            Use the email address your clinic has on file. After signing in you will confirm your
+            identity before any images open.
           </p>
 
           {error ? <Alert tone="crit">{error}</Alert> : null}

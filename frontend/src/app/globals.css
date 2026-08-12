@@ -155,8 +155,9 @@
 :root {
   /* niveau-grotesk is a Typekit face we cannot load; Avenir Next is the closest
      widely-installed geometric grotesque. */
-  --font-ui: "niveau-grotesk", "Avenir Next", Avenir, "Nunito Sans", "Segoe UI", system-ui,
-    -apple-system, sans-serif;
+  --font-ui:
+    "niveau-grotesk", "Avenir Next", Avenir, "Nunito Sans", "Segoe UI", system-ui, -apple-system,
+    sans-serif;
   --font-mono-stack: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 

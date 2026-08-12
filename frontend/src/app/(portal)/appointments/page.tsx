@@ -78,16 +78,14 @@ export default function AppointmentsPage() {
                   "bg-panel enabled:hover:border-brand enabled:hover:bg-brand-tint",
                 ].join(" ")}
               >
-                <span className="text-[0.9375rem] font-bold tabular-nums">
-                  {slot.patientTime}
-                </span>
+                <span className="text-[0.9375rem] font-bold tabular-nums">{slot.patientTime}</span>
                 <span className="text-xs text-ink-3">{slot.clinicTime}</span>
               </button>
             ))}
           </div>
           <p className="text-xs text-ink-3">
-            Struck-through times are already taken. The last remaining time of the day is
-            outlined so it is obvious before you commit.
+            Struck-through times are already taken. The last remaining time of the day is outlined
+            so it is obvious before you commit.
           </p>
         </CardBody>
       </Card>

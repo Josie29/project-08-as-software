@@ -8,8 +8,7 @@ import { Alert, Button, Card, Eyebrow, Field, TextInput } from "@/components/ui"
 import { createClient } from "@/lib/supabase/client";
 
 /** The one message shown for every failure, mirroring the API. */
-const GENERIC_FAILURE =
-  "We couldn't match those details. Check your visit summary and try again.";
+const GENERIC_FAILURE = "We couldn't match those details. Check your visit summary and try again.";
 
 /**
  * Identity gate.
@@ -75,8 +74,8 @@ export default function VerifyPage() {
             <h1 className="text-2xl">Confirm it&rsquo;s you</h1>
           </div>
           <p className="text-[0.9375rem] text-ink-2">
-            Signing in isn&rsquo;t enough to open your images. Enter the Patient ID from your
-            visit summary along with your date of birth. Both have to match the record on file.
+            Signing in isn&rsquo;t enough to open your images. Enter the Patient ID from your visit
+            summary along with your date of birth. Both have to match the record on file.
           </p>
 
           {error ? <Alert tone="crit">{error}</Alert> : null}
@@ -112,8 +111,8 @@ export default function VerifyPage() {
           </Button>
 
           <p className="text-xs text-ink-3">
-            Repeated failed attempts lock this step temporarily. Every attempt is written to
-            the access log.
+            Repeated failed attempts lock this step temporarily. Every attempt is written to the
+            access log.
           </p>
         </form>
       </Card>

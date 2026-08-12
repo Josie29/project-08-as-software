@@ -22,8 +22,8 @@ export default async function SharesPage() {
         <Eyebrow>Secure sharing</Eyebrow>
         <h1 className="text-2xl">Links you&rsquo;ve shared</h1>
         <p className="max-w-[44rem] text-[0.9375rem] text-ink-2">
-          Every link expires on its own, and you can switch one off at any moment. The email
-          carries the link and nothing else — no images, no report text, no health details.
+          Every link expires on its own, and you can switch one off at any moment. The email carries
+          the link and nothing else — no images, no report text, no health details.
         </p>
       </div>
 

@@ -106,7 +106,11 @@ export function ShareModal({
                   : (result.email_error ?? "The email did not send, but the link below works.")}
               </span>
             </Alert>
-            <Field label="The link" htmlFor="share-link" hint="Anyone with this link can open the file until it expires or you switch it off.">
+            <Field
+              label="The link"
+              htmlFor="share-link"
+              hint="Anyone with this link can open the file until it expires or you switch it off."
+            >
               <div
                 id="share-link"
                 className="rounded-md bg-brand-tint p-3 font-mono text-xs break-all text-brand"
@@ -175,8 +179,8 @@ export function ShareModal({
 
             <Alert tone="brand">
               <span>
-                You can switch this link off at any time from Shared links. Every time it is
-                opened is written to your access log.
+                You can switch this link off at any time from Shared links. Every time it is opened
+                is written to your access log.
               </span>
             </Alert>
 

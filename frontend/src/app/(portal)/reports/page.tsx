@@ -20,15 +20,14 @@ export default async function ReportsPage() {
         <Eyebrow>Your reports</Eyebrow>
         <h1 className="text-2xl">Reports</h1>
         <p className="max-w-[44rem] text-[0.9375rem] text-ink-2">
-          A report reaches you once your radiologist signs it. Preliminary reads stay with
-          your care team until then.
+          A report reaches you once your radiologist signs it. Preliminary reads stay with your care
+          team until then.
         </p>
       </div>
 
       {reports.length === 0 ? (
         <EmptyState>
-          You have no signed reports yet. One appears here as soon as your radiologist signs
-          it.
+          You have no signed reports yet. One appears here as soon as your radiologist signs it.
         </EmptyState>
       ) : (
         reports.map((report) => (
@@ -52,9 +51,9 @@ export default async function ReportsPage() {
         <CardBody>
           <Alert tone="warn">
             <span>
-              A study whose report your radiologist has not yet signed does not appear above.
-              The signed report shows up here automatically, usually within one business day.
-              For anything urgent, please call the clinic.
+              A study whose report your radiologist has not yet signed does not appear above. The
+              signed report shows up here automatically, usually within one business day. For
+              anything urgent, please call the clinic.
             </span>
           </Alert>
         </CardBody>

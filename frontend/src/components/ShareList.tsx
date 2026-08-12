@@ -82,7 +82,8 @@ export function ShareList({ initial }: { initial: ShareRecord[] }) {
                       </div>
                       <div className="text-[0.8125rem] text-ink-3">
                         {share.recipient_email} · expires{" "}
-                        {new Date(share.expires_at).toLocaleString("en-US", { timeZone: "UTC" })} UTC
+                        {new Date(share.expires_at).toLocaleString("en-US", { timeZone: "UTC" })}{" "}
+                        UTC
                       </div>
                       <div className="text-[0.6875rem] text-ink-3">
                         Opened {share.access_count} {share.access_count === 1 ? "time" : "times"}

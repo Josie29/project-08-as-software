@@ -3,8 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Patient Imaging Portal",
-  description:
-    "Secure access to your ultrasound images, cine clips, reports, and appointments.",
+  description: "Secure access to your ultrasound images, cine clips, reports, and appointments.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

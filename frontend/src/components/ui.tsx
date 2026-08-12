@@ -12,8 +12,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const BUTTON_TONES: Record<ButtonTone, string> = {
   default: "bg-panel border-line text-ink hover:border-brand hover:text-brand",
-  primary:
-    "bg-brand border-brand text-brand-ink hover:bg-brand-deep hover:border-brand-deep",
+  primary: "bg-brand border-brand text-brand-ink hover:bg-brand-deep hover:border-brand-deep",
   ghost: "bg-transparent border-transparent text-ink hover:bg-brand-tint",
   danger: "bg-panel border-line text-ink hover:border-crit hover:text-crit",
   scan: "bg-transparent border-scan-line text-scan-ink hover:border-scan-accent hover:text-scan-accent",
@@ -31,7 +30,9 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   ref,
 ) {
   const sizing =
-    size === "sm" ? "min-h-[2.125rem] px-3 py-1 text-[0.8125rem]" : "min-h-[2.625rem] px-[1.125rem] py-2 text-sm";
+    size === "sm"
+      ? "min-h-[2.125rem] px-3 py-1 text-[0.8125rem]"
+      : "min-h-[2.625rem] px-[1.125rem] py-2 text-sm";
   return (
     <button
       className={[
@@ -128,7 +129,13 @@ export function CardHead({ children }: { children: ReactNode }) {
 }
 
 /** Padded body of a card. */
-export function CardBody({ className = "", children }: { className?: string; children: ReactNode }) {
+export function CardBody({
+  className = "",
+  children,
+}: {
+  className?: string;
+  children: ReactNode;
+}) {
   return <div className={`grid gap-4 p-5 ${className}`}>{children}</div>;
 }
 

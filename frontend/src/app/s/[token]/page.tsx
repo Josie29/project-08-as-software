@@ -79,8 +79,8 @@ function Shell({ children }: { children: React.ReactNode }) {
       <div className="grid gap-1.5">
         <Eyebrow>Shared with you</Eyebrow>
         <p className="text-[0.9375rem] text-ink-2">
-          Someone shared this through their care provider&rsquo;s portal. The link expires on
-          its own and can be switched off at any time.
+          Someone shared this through their care provider&rsquo;s portal. The link expires on its
+          own and can be switched off at any time.
         </p>
       </div>
       {children}
