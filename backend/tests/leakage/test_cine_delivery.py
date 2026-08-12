@@ -257,3 +257,103 @@ async def test_a_refused_clip_is_recorded(
         seeded["neighbour_clip_id"],
     )
     assert denied == 1
+
+
+def _unpack(payload: bytes) -> dict[int, bytes]:
+    """Decode a frame bundle into sequence-keyed bytes.
+
+    Written independently of the packer rather than importing it: a test that reuses the
+    encoder proves the two agree, not that the format is what the client expects.
+
+    Args:
+        payload: The bundle body.
+
+    Returns:
+        Frame bytes by sequence number.
+    """
+    count = int.from_bytes(payload[:4], "little")
+    entries: list[tuple[int, int]] = []
+    offset = 4
+    for _ in range(count):
+        sequence = int.from_bytes(payload[offset : offset + 2], "little")
+        length = int.from_bytes(payload[offset + 2 : offset + 6], "little")
+        entries.append((sequence, length))
+        offset += 6
+
+    frames: dict[int, bytes] = {}
+    for sequence, length in entries:
+        frames[sequence] = payload[offset : offset + length]
+        offset += length
+    return frames
+
+
+async def test_the_bundle_carries_every_intact_frame_in_one_response(
+    api: httpx.AsyncClient,
+    db: asyncpg.Connection,
+    seeded: dict[str, Any],
+    auth_headers: Any,
+    storage: _StubStorage,
+) -> None:
+    """The bundle exists to collapse a hundred round trips into one. If it came back short,
+    the player would silently treat the absent frames as gaps in an undamaged study."""
+    caller = uuid4()
+    await verify_identity(db, caller, seeded["demo_patient_id"])
+
+    response = await api.get(f"/cine/{seeded['demo_clip_id']}/frames", headers=auth_headers(caller))
+
+    assert response.status_code == 200
+    frames = _unpack(response.content)
+    assert sorted(frames) == list(range(seeded["demo_clip_frame_count"]))
+    assert all(payload == JPEG for payload in frames.values())
+
+
+async def test_the_bundle_omits_frames_the_study_is_missing(
+    api: httpx.AsyncClient,
+    db: asyncpg.Connection,
+    seeded: dict[str, Any],
+    auth_headers: Any,
+    storage: _StubStorage,
+) -> None:
+    """Edge case #2 through the bulk path. Storage is never asked for an object that was
+    never uploaded, and the gap stays a gap rather than becoming a failed clip."""
+    caller = uuid4()
+    await verify_identity(db, caller, seeded["demo_patient_id"])
+
+    response = await api.get(
+        f"/cine/{seeded['damaged_clip_id']}/frames", headers=auth_headers(caller)
+    )
+
+    frames = _unpack(response.content)
+    assert set(seeded["damaged_clip_missing"]).isdisjoint(frames)
+    assert len(storage.requested) == len(frames)
+
+
+async def test_a_foreign_bundle_is_refused_before_storage_is_touched(
+    api: httpx.AsyncClient,
+    db: asyncpg.Connection,
+    seeded: dict[str, Any],
+    auth_headers: Any,
+    storage: _StubStorage,
+) -> None:
+    """The bundle is the fastest way to exfiltrate a whole clip, so it needs the same
+    ownership check as the per-frame route rather than inheriting one."""
+    caller = uuid4()
+    await verify_identity(db, caller, seeded["demo_patient_id"])
+
+    response = await api.get(
+        f"/cine/{seeded['neighbour_clip_id']}/frames", headers=auth_headers(caller)
+    )
+
+    assert response.status_code == 404
+    assert storage.requested == []
+
+
+async def test_an_unverified_session_cannot_reach_the_bundle(
+    api: httpx.AsyncClient, seeded: dict[str, Any], auth_headers: Any
+) -> None:
+    """A valid token is not enough for the bulk path either."""
+    response = await api.get(
+        f"/cine/{seeded['demo_clip_id']}/frames", headers=auth_headers(uuid4())
+    )
+
+    assert response.status_code == 403

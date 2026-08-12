@@ -396,6 +396,44 @@ class PatientScope:
             ],
         )
 
+    async def open_all_frames(self, clip_id: UUID) -> list[FrameAccess] | None:
+        """Authorise every intact frame of a clip in one query.
+
+        Backs the bundle endpoint. Frames the manifest marks damaged are excluded here
+        rather than filtered later, so there is no path that could serve one.
+
+        Args:
+            clip_id: The clip requested.
+
+        Returns:
+            Storage references in playback order, or None if the clip is missing or not
+            theirs.
+        """
+        owns = await self._session.scalar(
+            select(CineClip.id)
+            .join(Study, CineClip.study_id == Study.id)
+            .where(
+                CineClip.id == clip_id,
+                Study.patient_id == self._patient_id,
+                Study.status == StudyStatus.COMPLETED,
+            )
+        )
+        if owns is None:
+            await self._record(AuditAction.CINE_ACCESS_DENIED, "cine_clip", clip_id)
+            return None
+
+        frames = (
+            await self._session.execute(
+                select(CineFrame.sequence, CineFrame.storage_path)
+                .where(CineFrame.clip_id == clip_id, CineFrame.integrity == FrameIntegrity.OK)
+                .order_by(CineFrame.sequence)
+            )
+        ).all()
+        return [
+            FrameAccess(clip_id=clip_id, sequence=sequence, storage_path=path)
+            for sequence, path in frames
+        ]
+
     async def open_frame(self, clip_id: UUID, sequence: int) -> FrameAccess | None:
         """Authorise access to one frame's bytes.
 
@@ -430,6 +468,17 @@ class PatientScope:
         return FrameAccess(
             clip_id=clip_id, sequence=frame.sequence, storage_path=frame.storage_path
         )
+
+    async def release(self) -> None:
+        """Return this scope's database connection to the pool.
+
+        Called by byte-serving routes once authorisation is settled. Object storage round
+        trips take far longer than the query that authorised them, and a session held
+        across one is a pooled connection doing nothing: with a small pool in front of a
+        shared pooler, that alone caps how many scans the API can serve at once. The scope
+        must not be used again afterwards.
+        """
+        await self._session.close()
 
     async def get_profile(self) -> PatientProfile | None:
         """Return the patient's own identifying details.

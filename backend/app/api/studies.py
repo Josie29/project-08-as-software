@@ -122,6 +122,9 @@ async def _serve_image(
     access = await scope.open_image(image_id, thumbnail=thumbnail)
     if access is None:
         raise not_found()
+    # Authorisation and its audit entry are committed; holding the connection through the
+    # storage round trip would idle a pooled connection for the slowest part of the request.
+    await scope.release()
 
     try:
         content = await storage.download(access.storage_path)

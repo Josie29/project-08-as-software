@@ -1,3 +1,4 @@
+import asyncio
 from typing import Annotated
 from uuid import UUID
 
@@ -7,7 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from app.api.studies import NO_STORE, not_found
 from app.auth.dependencies import get_patient_scope
 from app.models.imaging import MAX_CINE_FRAMES
-from app.repositories.phi import CineClipSummary, CineManifest, PatientScope
+from app.repositories.phi import CineClipSummary, CineManifest, FrameAccess, PatientScope
+from app.services.cine_bundle import BUNDLE_FETCH_CONCURRENCY, BUNDLE_MEDIA_TYPE, pack_frames
 from app.services.storage import (
     ObjectStorage,
     StorageError,
@@ -71,6 +73,59 @@ async def get_clip_manifest(
     return manifest
 
 
+@router.get("/cine/{clip_id}/frames")
+async def get_clip_bundle(
+    clip_id: UUID,
+    scope: Annotated[PatientScope, Depends(get_patient_scope)],
+    storage: Annotated[ObjectStorage, Depends(get_object_storage)],
+) -> Response:
+    """Serve every intact frame of a clip in one response.
+
+    A hundred separate requests for a hundred small frames spends its whole budget on
+    round trips: browser to the web tier, web tier to the API, API to object storage, once
+    per frame. Fetching them here instead collapses that to a single client request and
+    keeps the storage fan-out next to storage, where the latency is smallest.
+
+    Frames whose bytes cannot be retrieved are simply absent from the bundle. The player
+    already handles a missing frame as a gap, so a storage failure degrades the same way a
+    damaged frame does instead of failing the whole clip.
+
+    Args:
+        clip_id: The clip requested.
+        scope: The verified patient's scope.
+        storage: Object storage client.
+
+    Returns:
+        The bundle, in the layout described by `pack_frames`.
+
+    Raises:
+        HTTPException: 404 if the clip is missing, not completed, or another patient's.
+    """
+    frames = await scope.open_all_frames(clip_id)
+    if frames is None:
+        raise not_found()
+    await scope.release()
+
+    limiter = asyncio.Semaphore(BUNDLE_FETCH_CONCURRENCY)
+
+    async def fetch(access: FrameAccess) -> tuple[int, bytes] | None:
+        async with limiter:
+            try:
+                return access.sequence, await storage.download(access.storage_path)
+            except StorageError:
+                logger.warning(
+                    "cine.bundle_frame_missing", clip_uuid=str(clip_id), sequence=access.sequence
+                )
+                return None
+
+    fetched = await asyncio.gather(*(fetch(access) for access in frames))
+    return Response(
+        content=pack_frames([entry for entry in fetched if entry is not None]),
+        media_type=BUNDLE_MEDIA_TYPE,
+        headers={"Cache-Control": NO_STORE},
+    )
+
+
 @router.get("/cine/{clip_id}/frames/{sequence}")
 async def get_clip_frame(
     clip_id: UUID,
@@ -105,6 +160,7 @@ async def get_clip_frame(
     access = await scope.open_frame(clip_id, sequence)
     if access is None:
         raise not_found()
+    await scope.release()
 
     try:
         content = await storage.download(access.storage_path)
