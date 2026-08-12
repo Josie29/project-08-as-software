@@ -10,12 +10,13 @@ from app.models.audit import AuditLogEntry
 from app.models.enums import (
     AuditAction,
     AuditActorType,
+    FrameIntegrity,
     ReportStatus,
     ShareResourceType,
     StudyStatus,
 )
 from app.models.identity import Patient
-from app.models.imaging import Image, Study
+from app.models.imaging import CineClip, CineFrame, Image, Study
 from app.models.reports import Report
 from app.models.sharing import ShareLink
 from app.services.sharing import hash_token, mint_token
@@ -104,6 +105,47 @@ class ImageAccess(BaseModel):
     id: UUID
     storage_path: str
     thumbnail_path: str | None
+
+
+class CineClipSummary(BaseModel):
+    """A cine clip as it appears alongside a study's stills."""
+
+    id: UUID
+    study_id: UUID
+    sequence: int
+    frame_count: int
+    default_fps: int
+    available_frame_count: int
+
+
+class CineFrameEntry(BaseModel):
+    """One entry in a clip's manifest.
+
+    `available` is resolved from the stored integrity flag rather than discovered when the
+    player asks for the bytes, so a damaged clip is a known shape up front instead of a
+    404 mid-playback (edge case #2).
+    """
+
+    sequence: int
+    available: bool
+
+
+class CineManifest(BaseModel):
+    """The ordered frame list for one clip."""
+
+    id: UUID
+    study_id: UUID
+    frame_count: int
+    default_fps: int
+    frames: list[CineFrameEntry]
+
+
+class FrameAccess(BaseModel):
+    """An authorised reference to one cine frame's stored object."""
+
+    clip_id: UUID
+    sequence: int
+    storage_path: str
 
 
 class PatientScope:
@@ -260,6 +302,133 @@ class PatientScope:
             if thumbnail and image.thumbnail_path
             else image.storage_path,
             thumbnail_path=image.thumbnail_path,
+        )
+
+    async def list_clips(self, study_id: UUID) -> list[CineClipSummary] | None:
+        """Return cine clips for one of the patient's completed studies.
+
+        Args:
+            study_id: The study to list.
+
+        Returns:
+            Clip summaries in capture order, or None if the study is missing, not
+            completed, or not theirs.
+        """
+        owns = await self._session.scalar(
+            select(Study.id).where(
+                Study.id == study_id,
+                Study.patient_id == self._patient_id,
+                Study.status == StudyStatus.COMPLETED,
+            )
+        )
+        if owns is None:
+            await self._record(AuditAction.STUDY_ACCESS_DENIED, "study", study_id)
+            return None
+
+        result = await self._session.execute(
+            select(
+                CineClip,
+                func.count(CineFrame.id).filter(CineFrame.integrity == FrameIntegrity.OK),
+            )
+            .outerjoin(CineFrame, CineFrame.clip_id == CineClip.id)
+            .where(CineClip.study_id == study_id)
+            .group_by(CineClip.id)
+            .order_by(CineClip.sequence)
+        )
+        return [
+            CineClipSummary(
+                id=clip.id,
+                study_id=clip.study_id,
+                sequence=clip.sequence,
+                frame_count=clip.frame_count,
+                default_fps=clip.default_fps,
+                available_frame_count=available,
+            )
+            for clip, available in result.all()
+        ]
+
+    async def open_clip(self, clip_id: UUID) -> CineManifest | None:
+        """Authorise a cine clip and return its ordered frame manifest.
+
+        This is the audited event for cine: one entry per clip opened, not one per frame.
+        A hundred rows for a single playback would bury the access log without recording
+        anything the manifest entry does not already say.
+
+        Args:
+            clip_id: The clip requested.
+
+        Returns:
+            The manifest, or None if the clip is missing, belongs to a non-completed
+            study, or belongs to another patient.
+        """
+        clip = (
+            await self._session.execute(
+                select(CineClip)
+                .join(Study, CineClip.study_id == Study.id)
+                .where(
+                    CineClip.id == clip_id,
+                    Study.patient_id == self._patient_id,
+                    Study.status == StudyStatus.COMPLETED,
+                )
+            )
+        ).scalar_one_or_none()
+        if clip is None:
+            await self._record(AuditAction.CINE_ACCESS_DENIED, "cine_clip", clip_id)
+            return None
+
+        frames = (
+            await self._session.execute(
+                select(CineFrame.sequence, CineFrame.integrity)
+                .where(CineFrame.clip_id == clip.id)
+                .order_by(CineFrame.sequence)
+            )
+        ).all()
+
+        await self._record(AuditAction.CINE_VIEWED, "cine_clip", clip.id)
+        return CineManifest(
+            id=clip.id,
+            study_id=clip.study_id,
+            frame_count=clip.frame_count,
+            default_fps=clip.default_fps,
+            frames=[
+                CineFrameEntry(sequence=sequence, available=integrity is FrameIntegrity.OK)
+                for sequence, integrity in frames
+            ],
+        )
+
+    async def open_frame(self, clip_id: UUID, sequence: int) -> FrameAccess | None:
+        """Authorise access to one frame's bytes.
+
+        Ownership is re-checked here rather than inferred from the manifest call: the two
+        are separate requests, and nothing stops a caller from skipping the first.
+
+        Args:
+            clip_id: The clip the frame belongs to.
+            sequence: Zero-based frame position.
+
+        Returns:
+            A storage reference, or None if the frame is missing, damaged, or not theirs.
+        """
+        frame = (
+            await self._session.execute(
+                select(CineFrame)
+                .join(CineClip, CineFrame.clip_id == CineClip.id)
+                .join(Study, CineClip.study_id == Study.id)
+                .where(
+                    CineFrame.clip_id == clip_id,
+                    CineFrame.sequence == sequence,
+                    CineFrame.integrity == FrameIntegrity.OK,
+                    Study.patient_id == self._patient_id,
+                    Study.status == StudyStatus.COMPLETED,
+                )
+            )
+        ).scalar_one_or_none()
+        if frame is None:
+            await self._record(AuditAction.CINE_ACCESS_DENIED, "cine_clip", clip_id)
+            return None
+
+        return FrameAccess(
+            clip_id=clip_id, sequence=frame.sequence, storage_path=frame.storage_path
         )
 
     async def get_profile(self) -> PatientProfile | None:

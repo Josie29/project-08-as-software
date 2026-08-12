@@ -105,6 +105,19 @@ cd backend && uv run pytest           # coverage report included
 `GET /health` reports app, database, and storage reachability, returning `503` if any
 dependency is degraded so an uptime check can key off the status code alone.
 
+## Cine playback
+
+A clip is a JSON manifest (`GET /cine/{id}/manifest`) listing every frame in order with a
+per-frame `available` flag, plus one endpoint per frame. Clips play at **12 frames per
+second** by default — stored per clip as `cine_clips.default_fps`, and selectable in the
+viewer between 6 and 30.
+
+Availability is resolved from the manifest rather than discovered when the bytes are
+requested, so a study with frames missing shows a gap indicator and keeps playing instead
+of failing mid-clip. Frames are served `no-store` and held in memory for the life of the
+viewer: they are protected health information, and a cached frame is a copy of someone's
+scan left on whatever machine played it.
+
 ## Environment variables
 
 Every variable is documented with a placeholder in [`.env.example`](.env.example).
@@ -115,18 +128,18 @@ against a JWKS URL derived from `SUPABASE_URL`.
 
 ## Status
 
-Schema and seed complete. 17 tables in committed migrations, applied to local Postgres
-and Supabase, with no-double-booking enforced by a partial unique index and proven by a
-mutation-checked concurrency test. The demo profile seeds a working dataset in about
-twelve seconds. Priority 1 feature work is next.
+Priority 1 and 2 are complete and deployed. 17 tables in committed migrations, applied to
+local Postgres and Supabase, with no-double-booking enforced by a partial unique index and
+proven by a mutation-checked concurrency test. Scheduling is the remaining feature block.
 
 - [x] Repo scaffold, CI, health check, PHI-redacting logger
 - [x] Schema + migrations (17 tables, [docs/schema.md](docs/schema.md))
 - [x] Seed script with synthetic imaging assets (demo and full profiles)
-- [ ] Priority 1 — identity verification, image viewing, cine playback, secure sharing
-- [ ] Priority 2 — signed-report viewing and secure sharing
+- [x] Priority 1 — identity verification, image viewing, cine playback, no cross-patient
+      leakage (adversarial suite)
+- [x] Priority 2 — signed-report viewing and secure sharing with expiry and revocation
 - [ ] Priority 3 — availability, booking, concurrency guard, reminders
-- [ ] Performance benchmarks (k6), deployment, demo
+- [ ] Performance benchmarks (k6), demo video
 
 ## Priorities
 

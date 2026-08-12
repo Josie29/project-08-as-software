@@ -129,6 +129,41 @@ export async function getStudyImages(studyId: string): Promise<ImageSummary[]> {
   return apiFetch<ImageSummary[]>(`/studies/${studyId}/images`);
 }
 
+/** A cine clip as it appears alongside a study's stills. */
+export interface CineClipSummary {
+  id: string;
+  study_id: string;
+  sequence: number;
+  frame_count: number;
+  default_fps: number;
+  available_frame_count: number;
+}
+
+/** One entry in a clip's manifest. */
+export interface CineFrameEntry {
+  sequence: number;
+  available: boolean;
+}
+
+/** The ordered frame list for one clip. */
+export interface CineManifest {
+  id: string;
+  study_id: string;
+  frame_count: number;
+  default_fps: number;
+  frames: CineFrameEntry[];
+}
+
+/**
+ * Fetch cine clips for one study.
+ *
+ * @param studyId - The study to list.
+ * @returns The study's clips.
+ */
+export async function getStudyClips(studyId: string): Promise<CineClipSummary[]> {
+  return apiFetch<CineClipSummary[]>(`/studies/${studyId}/cine`);
+}
+
 /** A report as it appears in the patient's list. */
 export interface ReportSummary {
   id: string;

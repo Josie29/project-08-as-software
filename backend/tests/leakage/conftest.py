@@ -37,6 +37,12 @@ async def seeded(db: asyncpg.Connection) -> dict[str, Any]:
     cancelled = [s for s in demo.studies if s.status.value == "cancelled"]
     neighbour_study = neighbour.studies[0]
 
+    # The two demo clips differ on purpose: one is whole, one has frames marked MISSING.
+    whole_clip = completed[0].clips[0]
+    damaged_clip = next(
+        s.clips[0] for s in completed if any(f.integrity != "ok" for f in s.clips[0].frames)
+    )
+
     return {
         "demo_patient_id": demo.id,
         "demo_account_id": demo.account_id,
@@ -49,6 +55,13 @@ async def seeded(db: asyncpg.Connection) -> dict[str, Any]:
         "neighbour_account_id": neighbour.account_id,
         "neighbour_study_id": neighbour_study.id,
         "neighbour_image_id": neighbour_study.images[0].id,
+        "neighbour_clip_id": neighbour_study.clips[0].id,
+        "demo_clip_id": whole_clip.id,
+        "demo_clip_frame_count": whole_clip.frame_count,
+        "damaged_clip_id": damaged_clip.id,
+        "damaged_clip_missing": tuple(
+            frame.sequence for frame in damaged_clip.frames if frame.integrity != "ok"
+        ),
     }
 
 

@@ -5,12 +5,13 @@ import { useState } from "react";
 import { CinePlayer } from "@/components/CinePlayer";
 import { ImageViewer } from "@/components/ImageViewer";
 import { Card, CardBody, CardHead, EmptyState, Pill } from "@/components/ui";
-import type { ImageSummary, StudySummary } from "@/lib/api";
+import type { CineClipSummary, ImageSummary, StudySummary } from "@/lib/api";
 
-/** A study together with the image metadata already fetched for it. */
+/** A study together with the imaging metadata already fetched for it. */
 export interface StudyWithImages {
   study: StudySummary;
   images: ImageSummary[];
+  clips: CineClipSummary[];
 }
 
 /**
@@ -21,8 +22,14 @@ export interface StudyWithImages {
  * here would be showing a patient something the access check never approved.
  */
 export function StudyGallery({ studies }: { studies: StudyWithImages[] }) {
-  const [open, setOpen] = useState<{ images: ImageSummary[]; index: number } | null>(null);
-  const [cineOpen, setCineOpen] = useState(false);
+  const [open, setOpen] = useState<{
+    images: ImageSummary[];
+    index: number;
+  } | null>(null);
+  const [cine, setCine] = useState<{
+    clip: CineClipSummary;
+    label: string;
+  } | null>(null);
 
   if (studies.length === 0) {
     return (
@@ -34,7 +41,7 @@ export function StudyGallery({ studies }: { studies: StudyWithImages[] }) {
 
   return (
     <>
-      {studies.map(({ study, images }) => (
+      {studies.map(({ study, images, clips }) => (
         <Card key={study.id}>
           <CardHead>
             <h3 className="mr-auto text-base">{study.description ?? "Ultrasound study"}</h3>
@@ -52,7 +59,7 @@ export function StudyGallery({ studies }: { studies: StudyWithImages[] }) {
             </span>
           </CardHead>
           <CardBody>
-            {images.length === 0 ? (
+            {images.length === 0 && clips.length === 0 ? (
               <EmptyState>Images appear here once this visit is complete.</EmptyState>
             ) : (
               <div className="grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-3.5">
@@ -64,26 +71,29 @@ export function StudyGallery({ studies }: { studies: StudyWithImages[] }) {
                     onOpen={() => setOpen({ images, index })}
                   />
                 ))}
-                {/* The cine API is not built yet, so one sample clip is offered on the most
-                    recent study to make the player reachable. Labelled so it is never
-                    mistaken for one of this patient's real clips. */}
-                {study.id === studies[0]?.study.id ? (
-                  <CineTile onOpen={() => setCineOpen(true)} />
-                ) : null}
+                {clips.map((clip, index) => {
+                  const label = `CINE-${String(index + 1).padStart(4, "0")}`;
+                  return (
+                    <CineTile
+                      key={clip.id}
+                      clip={clip}
+                      label={label}
+                      onOpen={() => setCine({ clip, label })}
+                    />
+                  );
+                })}
               </div>
             )}
           </CardBody>
         </Card>
       ))}
 
-      {cineOpen ? <CinePlayer onClose={() => setCineOpen(false)} /> : null}
+      {cine ? (
+        <CinePlayer clip={cine.clip} label={cine.label} onClose={() => setCine(null)} />
+      ) : null}
 
       {open ? (
-        <ImageViewer
-          images={open.images}
-          startIndex={open.index}
-          onClose={() => setOpen(null)}
-        />
+        <ImageViewer images={open.images} startIndex={open.index} onClose={() => setOpen(null)} />
       ) : null}
     </>
   );
@@ -118,10 +128,7 @@ function Thumb({
                 from a broken one. The skeleton is what tells a patient on a slow
                 connection that something is still coming (edge case #3). */}
             {!loaded ? (
-              <span
-                className="absolute inset-0 animate-pulse bg-scan-chrome"
-                aria-hidden
-              />
+              <span className="absolute inset-0 animate-pulse bg-scan-chrome" aria-hidden />
             ) : null}
             {/* eslint-disable-next-line @next/next/no-img-element -- bytes are proxied
                 through a route handler that attaches the auth token; the optimizer
@@ -140,14 +147,28 @@ function Thumb({
         )}
       </div>
       <div className="flex items-center justify-between gap-1.5 bg-panel px-2.5 py-2">
-        <span className="text-xs font-semibold text-ink-2">IMG-{String(index + 1).padStart(4, "0")}</span>
+        <span className="text-xs font-semibold text-ink-2">
+          IMG-{String(index + 1).padStart(4, "0")}
+        </span>
         <span className="font-mono text-[0.625rem] text-brand">still</span>
       </div>
     </button>
   );
 }
 
-function CineTile({ onOpen }: { onOpen: () => void }) {
+function CineTile({
+  clip,
+  label,
+  onOpen,
+}: {
+  clip: CineClipSummary;
+  label: string;
+  onOpen: () => void;
+}) {
+  // A clip with holes in it says so on the tile rather than only once the player is open,
+  // so a patient is not surprised mid-playback by a study that was always incomplete.
+  const damaged = clip.available_frame_count < clip.frame_count;
+
   return (
     <button
       type="button"
@@ -158,8 +179,10 @@ function CineTile({ onOpen }: { onOpen: () => void }) {
         <span className="font-mono text-xs text-scan-accent">▶ CINE</span>
       </div>
       <div className="flex items-center justify-between gap-1.5 bg-panel px-2.5 py-2">
-        <span className="text-xs font-semibold text-ink-2">CINE-0001</span>
-        <span className="font-mono text-[0.625rem] text-brand">100 frames</span>
+        <span className="text-xs font-semibold text-ink-2">{label}</span>
+        <span className="font-mono text-[0.625rem] text-brand">
+          {damaged ? `${clip.available_frame_count}/${clip.frame_count}` : clip.frame_count} frames
+        </span>
       </div>
     </button>
   );

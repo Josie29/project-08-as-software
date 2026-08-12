@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { PortalFrame } from "@/components/PortalFrame";
 import { StudyGallery, type StudyWithImages } from "@/components/StudyGallery";
 import { Eyebrow } from "@/components/ui";
-import { getStudies, getStudyImages } from "@/lib/api";
+import { getStudies, getStudyClips, getStudyImages } from "@/lib/api";
 
 /** Every response here is one patient's PHI, so nothing on this route may be cached. */
 export const fetchCache = "only-no-store";
@@ -16,9 +16,20 @@ export default async function StudiesPage() {
   if (studies === null) redirect("/verify");
 
   const withImages: StudyWithImages[] = await Promise.all(
-    studies.map(async (study) => ({ study, images: await getStudyImages(study.id) })),
+    studies.map(async (study) => {
+      // Fetched together rather than in sequence: the two calls are independent, and
+      // serialising them would double the wait on the patient's main screen.
+      const [images, clips] = await Promise.all([
+        getStudyImages(study.id),
+        getStudyClips(study.id),
+      ]);
+      return { study, images, clips };
+    }),
   );
-  const imageTotal = withImages.reduce((sum, entry) => sum + entry.images.length, 0);
+  const imageTotal = withImages.reduce(
+    (sum, entry) => sum + entry.images.length + entry.clips.length,
+    0,
+  );
 
   return (
     <PortalFrame counts={{ "/studies": imageTotal }}>
@@ -26,8 +37,8 @@ export default async function StudiesPage() {
         <Eyebrow>Your imaging</Eyebrow>
         <h1 className="text-2xl">Images and cine clips</h1>
         <p className="max-w-[44rem] text-[0.9375rem] text-ink-2">
-          Only studies from visits you have already completed appear here. Open any image to
-          zoom and pan.
+          Only studies from visits you have already completed appear here. Open any image to zoom
+          and pan.
         </p>
       </div>
 

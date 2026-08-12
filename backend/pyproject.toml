@@ -53,6 +53,10 @@ addopts = "--cov=app --cov-report=term-missing --cov-fail-under=80 --import-mode
 # tests/seed, but unit-covering its rendering and upload plumbing would inflate the number
 # without testing anything the brief grades.
 omit = ["app/main.py", "alembic/*", "app/seed/*"]
+# Without this, every line after the first `await` in a route handler is reported unrun —
+# the request middleware hands the downstream app to another execution context and the
+# default tracer does not follow it. It understated the suite by ten points.
+concurrency = ["thread", "greenlet"]
 
 [tool.pyright]
 include = ["app", "tests", "alembic"]
