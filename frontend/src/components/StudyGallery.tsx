@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { CinePlayer } from "@/components/CinePlayer";
 import { ImageViewer } from "@/components/ImageViewer";
 import { Card, CardBody, CardHead, EmptyState, Pill } from "@/components/ui";
 import type { ImageSummary, StudySummary } from "@/lib/api";
@@ -21,6 +22,7 @@ export interface StudyWithImages {
  */
 export function StudyGallery({ studies }: { studies: StudyWithImages[] }) {
   const [open, setOpen] = useState<{ images: ImageSummary[]; index: number } | null>(null);
+  const [cineOpen, setCineOpen] = useState(false);
 
   if (studies.length === 0) {
     return (
@@ -58,11 +60,19 @@ export function StudyGallery({ studies }: { studies: StudyWithImages[] }) {
                     onOpen={() => setOpen({ images, index })}
                   />
                 ))}
+                {/* The cine API is not built yet, so one sample clip is offered on the most
+                    recent study to make the player reachable. Labelled so it is never
+                    mistaken for one of this patient's real clips. */}
+                {study.id === studies[0]?.study.id ? (
+                  <CineTile onOpen={() => setCineOpen(true)} />
+                ) : null}
               </div>
             )}
           </CardBody>
         </Card>
       ))}
+
+      {cineOpen ? <CinePlayer onClose={() => setCineOpen(false)} /> : null}
 
       {open ? (
         <ImageViewer
@@ -128,6 +138,24 @@ function Thumb({
       <div className="flex items-center justify-between gap-1.5 bg-panel px-2.5 py-2">
         <span className="text-xs font-semibold text-ink-2">IMG-{String(index + 1).padStart(4, "0")}</span>
         <span className="font-mono text-[0.625rem] text-brand">still</span>
+      </div>
+    </button>
+  );
+}
+
+function CineTile({ onOpen }: { onOpen: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="grid overflow-hidden rounded-md border border-brand bg-scan text-left transition hover:-translate-y-0.5"
+    >
+      <div className="grid aspect-[4/3] place-items-center bg-scan-chrome">
+        <span className="font-mono text-xs text-scan-accent">▶ CINE</span>
+      </div>
+      <div className="flex items-center justify-between gap-1.5 bg-panel px-2.5 py-2">
+        <span className="text-xs font-semibold text-ink-2">CINE-0001</span>
+        <span className="font-mono text-[0.625rem] text-brand">100 frames</span>
       </div>
     </button>
   );
