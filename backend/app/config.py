@@ -57,7 +57,9 @@ class Settings(BaseSettings):
     db_max_overflow: int = Field(default=2, ge=0, le=20)
 
     resend_api_key: str = ""
-    resend_from_email: str = "noreply@example.com"
+    # Defaults to Resend's sandbox sender rather than a made-up address: an unverified
+    # from-address is rejected with a 403 that only shows up at send time.
+    resend_from_email: str = "onboarding@resend.dev"
 
     # Public base URL of the patient-facing frontend; share links are built from it.
     frontend_base_url: str = "http://localhost:3000"
