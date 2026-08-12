@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 
 import { Button } from "@/components/ui";
 import { createClient } from "@/lib/supabase/client";
@@ -22,13 +22,16 @@ export interface PatientProfile {
  */
 export function PatientCard({ profile }: { profile: PatientProfile }) {
   const router = useRouter();
-  // Resolved after mount, never during render: the server's zone and the browser's differ,
-  // and rendering one then the other is a hydration mismatch. React responds by discarding
-  // the server HTML, which can leave event handlers unattached across the whole tree.
-  const [timeZone, setTimeZone] = useState<string | null>(null);
-  useEffect(() => {
-    setTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone);
-  }, []);
+  // The server's zone and the browser's differ, and rendering one then the other is a
+  // hydration mismatch — React discards the server HTML, which can leave event handlers
+  // unattached across the tree. useSyncExternalStore renders the placeholder on the server
+  // and the real zone on the client, which is a legitimate difference rather than a
+  // mismatch. The value never changes, so the subscribe callback is a no-op.
+  const timeZone = useSyncExternalStore(
+    () => () => {},
+    () => Intl.DateTimeFormat().resolvedOptions().timeZone,
+    () => "—",
+  );
 
   async function endSession() {
     await createClient().auth.signOut();
@@ -41,7 +44,7 @@ export function PatientCard({ profile }: { profile: PatientProfile }) {
       <div className="text-base font-bold">{profile.display_name}</div>
       <Row label="Patient ID" value={profile.account_id} />
       <Row label="Date of birth" value={profile.date_of_birth_masked} />
-      <Row label="Time zone" value={timeZone ?? "—"} />
+      <Row label="Time zone" value={timeZone} />
       <Button tone="ghost" size="sm" onClick={endSession}>
         End session
       </Button>
