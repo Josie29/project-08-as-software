@@ -39,11 +39,15 @@ export function StudyGallery({ studies }: { studies: StudyWithImages[] }) {
           <CardHead>
             <h3 className="mr-auto text-base">{study.description ?? "Ultrasound study"}</h3>
             <Pill tone="ok">Completed</Pill>
+            {/* Formatted with an explicit locale and zone: leaving them to the runtime
+                gives one string on the server and another in the browser, which is a
+                hydration mismatch (React error #418). */}
             <span className="text-[0.8125rem] text-ink-3">
-              {new Date(study.performed_at).toLocaleDateString(undefined, {
+              {new Date(study.performed_at).toLocaleDateString("en-US", {
                 year: "numeric",
                 month: "short",
                 day: "numeric",
+                timeZone: "UTC",
               })}
             </span>
           </CardHead>

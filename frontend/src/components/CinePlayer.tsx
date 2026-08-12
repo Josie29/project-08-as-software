@@ -124,12 +124,14 @@ export function CinePlayer({ onClose }: { onClose: () => void }) {
           </Button>
         </div>
 
-        <div className="relative grid bg-scan">
+        {/* The stage is capped so the transport is always on screen. Controls that need
+            scrolling to reach are controls a patient will not find. */}
+        <div className="relative grid max-h-[52dvh] place-items-center overflow-hidden bg-scan">
           <canvas
             ref={canvasRef}
             width={STAGE_WIDTH}
             height={STAGE_HEIGHT}
-            className="aspect-[4/3] w-full"
+            className="block max-h-[52dvh] w-full max-w-full object-contain"
           />
 
           {/* Overlay mirrors the readout on a real ultrasound console. */}
