@@ -307,3 +307,31 @@ export async function getAppointments(): Promise<AppointmentRecord[] | null> {
 export async function getOpenSlots(providerId: string, days = 30): Promise<SlotOffer[]> {
   return apiFetch<SlotOffer[]>(`/providers/${providerId}/slots?days=${days}`);
 }
+
+/** Who performed an audited action. */
+export type AuditActorType = "patient" | "staff" | "share_link" | "system";
+
+/** One access-log line. Carries references, never content. */
+export interface ActivityEntry {
+  id: number;
+  occurred_at: string;
+  actor_type: AuditActorType;
+  action: string;
+  resource_type: string;
+  resource_id: string | null;
+  allowed: boolean;
+}
+
+/**
+ * Fetch the caller's own access log.
+ *
+ * @returns Their activity, or null when identity verification is still required.
+ */
+export async function getActivity(): Promise<ActivityEntry[] | null> {
+  try {
+    return await apiFetch<ActivityEntry[]>("/activity");
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 403) return null;
+    throw error;
+  }
+}

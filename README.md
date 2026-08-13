@@ -110,6 +110,18 @@ uv run python -m app.reminders          # one pass; prints due/sent/failed/skipp
 The API also runs this every `REMINDER_POLL_MINUTES` in-process. Both call the same
 function, so the command above is the deployed behaviour rather than a demo shortcut.
 
+**Benchmarks**
+
+```bash
+k6 run -e API=http://localhost:8000 -e SUPABASE_URL=... -e SUPABASE_ANON_KEY=... \
+       -e EMAIL=patient@demo.test -e PASSWORD=... \
+       -e ACCOUNT_ID=AS-100241 -e DOB=1991-06-24 k6/portal.js
+```
+
+Measured results and analysis: [docs/benchmarks.md](docs/benchmarks.md). The p95 targets
+are **not currently met** — the numbers and the reason are recorded there rather than
+implied.
+
 **Health check**
 
 `GET /health` reports app, database, and storage reachability, returning `503` if any
@@ -149,6 +161,64 @@ The message carries the appointment time and a portal link. No patient name, no 
 no reason for the visit: the time is what makes a reminder work, and everything else would
 expose PHI to the email provider for nothing (see Security).
 
+## Protected health information
+
+Everything below is PHI and is treated as such throughout. This is a demonstration of
+HIPAA-aware practice, not a claim of certified compliance.
+
+| Data | Where it lives | How it is protected |
+|---|---|---|
+| Patient identity (name, account ID, date of birth, contact) | `patients` | Behind auth plus the ID + date-of-birth check; the submitted date of birth is never stored on a failed attempt |
+| Ultrasound images and cine frames | Supabase Storage; metadata in `images`, `cine_clips`, `cine_frames` | Never public; bytes are proxied through the API so every read is authorised and audited, and served `no-store` |
+| Reports | `reports` | Only `final`/`amended` reach a patient; a preliminary read is excluded in SQL, not filtered later |
+| Appointments and provider names | `appointments`, `appointment_slots` | Behind the same identity gate as imaging — an appointment reveals a named clinician and a date |
+| Share links | `share_links` | Token stored as a digest, never in plaintext; time-limited, revocable, every use audited |
+| Access log | `audit_log` | Append-only, enforced by a trigger; records actor, action, target and time — never content |
+
+**Roles.** `patient` sees only their own record. `provider` sees only their own schedule
+and their own patients; the provider is read from the caller's staff row, never from the
+request, so a clinician cannot act for a colleague by changing a parameter. `admin` is a
+staff role scoped to the provider they support. Enforcement is server-side on every route,
+and a committed test asserts that no route reaches the application without a scope
+dependency — adding an unguarded PHI endpoint fails the suite.
+
+**No PHI in logs.** Application logs carry identifiers and request IDs only. The validation
+error handler is custom for this reason: FastAPI's default echoes the offending input,
+which on the identity endpoint would put a submitted date of birth straight into a log.
+
+**Encryption.** TLS in transit everywhere. At rest, Supabase encrypts both Postgres and
+Storage.
+
+### Retention and deletion
+
+| Data | Retained | Then |
+|---|---|---|
+| Images, cine clips, reports | 7 years from the study date, the usual clinical minimum for adult records | Storage objects and rows deleted together |
+| Appointments and their audit trail | 7 years | Deleted with the patient record |
+| Share links | Deleted 30 days after expiry | The audit entry of its use is kept |
+| Access log | 6 years, the HIPAA minimum for compliance records | Deleted |
+| Identity attempts | 90 days | Deleted; they exist to power lockout, not history |
+
+A patient may request deletion of their record. Honouring it removes their rows and their
+storage objects; audit entries are retained as required for compliance, but they name only
+identifiers, never content. **The scheduled enforcement job is not built** — the policy is
+stated and the schema supports it, but nothing currently expires data automatically.
+
+### Business Associate Agreements
+
+Any vendor that stores or processes PHI needs a BAA before real-world use:
+
+| Vendor | Role | Needs a BAA |
+|---|---|---|
+| Supabase | Postgres, Auth, Storage — holds every image, report and identity | Yes |
+| Railway | Runs the API, so PHI passes through it in memory | Yes |
+| Resend | Sends reminders and share notifications | Yes |
+| Vercel | Serves the frontend and proxies API calls | Yes |
+
+Message bodies are written to keep third-party exposure minimal: a share notification
+carries a link and nothing else, and a reminder carries the appointment time and a portal
+link — no name, no clinician, no reason for the visit.
+
 ## Environment variables
 
 Every variable is documented with a placeholder in [`.env.example`](.env.example).
@@ -171,8 +241,11 @@ demo remain.
       leakage (adversarial suite)
 - [x] Priority 2 — signed-report viewing and secure sharing with expiry and revocation
 - [x] Priority 3 — availability, booking, concurrency guard, lifecycle, reminders
-- [ ] Activity screen wired to a patient-scoped audit read API
-- [ ] Performance benchmarks (k6), demo video
+- [x] Patient-scoped access log, end to end
+- [x] Committed k6 benchmark suite — see [docs/benchmarks.md](docs/benchmarks.md)
+- [ ] Meeting the p95 targets: measured and analysed, not yet optimised (Stretch #16)
+- [ ] Retention/deletion enforcement job (policy stated, not automated)
+- [ ] Demo video
 
 ## Priorities
 

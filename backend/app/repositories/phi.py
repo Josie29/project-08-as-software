@@ -1,9 +1,10 @@
+import re
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import structlog
 from pydantic import BaseModel
-from sqlalchemy import func, select, update
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.audit import AuditLogEntry
@@ -18,6 +19,7 @@ from app.models.enums import (
 from app.models.identity import Patient
 from app.models.imaging import CineClip, CineFrame, Image, Study
 from app.models.reports import Report
+from app.models.scheduling import Appointment
 from app.models.sharing import ShareLink
 from app.services.sharing import hash_token, mint_token
 
@@ -146,6 +148,28 @@ class FrameAccess(BaseModel):
     clip_id: UUID
     sequence: int
     storage_path: str
+
+
+#: An action naming a refusal rather than an access. Derived from the action string so a
+#: new denial action is classified correctly the moment it is added, rather than needing a
+#: parallel list here that someone must remember to update.
+_IS_REFUSAL = re.compile(r"_(denied|failed)$")
+
+
+class ActivityEntry(BaseModel):
+    """One access-log line as the patient sees it.
+
+    Carries references, never content: an entry says an image was viewed, not what it
+    showed (brief: no PHI in logs).
+    """
+
+    id: int
+    occurred_at: datetime
+    actor_type: AuditActorType
+    action: str
+    resource_type: str
+    resource_id: UUID | None
+    allowed: bool
 
 
 class PatientScope:
@@ -672,6 +696,57 @@ class PatientScope:
         revoked = result.scalar_one_or_none() is not None
         await self._record(AuditAction.SHARE_LINK_REVOKED, "share_link", share_id)
         return revoked
+
+    async def list_activity(self, *, limit: int = 100) -> list[ActivityEntry]:
+        """Return the patient's own access-log entries, newest first.
+
+        Scoped on `actor_id`, which for a share-link read is the patient who created the
+        link — so one filter covers both the patient's own reads and every use of a link
+        they issued, and no other patient's row can be selected by construction.
+
+        System entries are folded in for the patient's own appointments, so a reminder the
+        clinic sent them is visible alongside everything else. Those carry a null actor, so
+        they are scoped by resource instead.
+
+        Refused attempts made by *other* patients against this patient's resources are
+        deliberately not here. They are recorded and reviewable by an admin, but showing
+        them would tell one patient that another exists and went looking for them, which is
+        itself a disclosure.
+
+        Args:
+            limit: Maximum entries to return.
+
+        Returns:
+            The patient's activity, newest first.
+        """
+        own_appointments = select(Appointment.id).where(Appointment.patient_id == self._patient_id)
+        result = await self._session.scalars(
+            select(AuditLogEntry)
+            .where(
+                or_(
+                    AuditLogEntry.actor_id == self._patient_id,
+                    and_(
+                        AuditLogEntry.actor_type == AuditActorType.SYSTEM,
+                        AuditLogEntry.resource_type == "appointment",
+                        AuditLogEntry.resource_id.in_(own_appointments),
+                    ),
+                )
+            )
+            .order_by(AuditLogEntry.occurred_at.desc(), AuditLogEntry.id.desc())
+            .limit(limit)
+        )
+        return [
+            ActivityEntry(
+                id=entry.id,
+                occurred_at=entry.occurred_at,
+                actor_type=entry.actor_type,
+                action=entry.action,
+                resource_type=entry.resource_type,
+                resource_id=entry.resource_id,
+                allowed=not _IS_REFUSAL.search(entry.action),
+            )
+            for entry in result.all()
+        ]
 
 
 def _to_record(link: ShareLink) -> ShareRecord:

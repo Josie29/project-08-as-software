@@ -9,7 +9,17 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api import appointments, availability, cine, health, identity, reports, shares, studies
+from app.api import (
+    activity,
+    appointments,
+    availability,
+    cine,
+    health,
+    identity,
+    reports,
+    shares,
+    studies,
+)
 from app.config import get_settings
 from app.db import dispose_engine
 from app.logging import configure_logging
@@ -81,6 +91,7 @@ app.include_router(reports.router)
 app.include_router(shares.router)
 app.include_router(appointments.router)
 app.include_router(availability.router)
+app.include_router(activity.router)
 
 
 @app.middleware("http")
