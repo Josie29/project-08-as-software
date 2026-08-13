@@ -13,6 +13,10 @@ os.environ.setdefault(
 )
 os.environ.setdefault("SUPABASE_URL", "http://localhost:54321")
 os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "test-service-role-key")
+# The reminder job is exercised by calling its dispatch function directly. Leaving the
+# background scheduler running under the test client would have it competing for the same
+# connection pool and mutating rows the assertions are reading.
+os.environ.setdefault("REMINDER_SCHEDULER_ENABLED", "false")
 
 import asyncpg
 import httpx

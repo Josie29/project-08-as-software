@@ -76,6 +76,16 @@ class Settings(BaseSettings):
     # (Core #13). Enforced server-side; the UI hiding the button is not the guarantee.
     booking_min_notice_hours: int = Field(default=24, ge=0, le=168)
 
+    # How far before the start time a reminder goes out (Core #15).
+    reminder_lead_hours: int = Field(default=24, ge=1, le=168)
+    # How often the in-process job looks for due reminders. Frequent polling is cheap
+    # because the query is indexed and idempotency is a database constraint, so an extra
+    # pass costs one query rather than risking a duplicate send.
+    reminder_poll_minutes: int = Field(default=15, ge=1, le=1440)
+    # Lets the load tests and the local dev server run without a background job competing
+    # for the connection pool. Production leaves it on.
+    reminder_scheduler_enabled: bool = True
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def _split_origins(cls, value: str | list[str]) -> list[str]:

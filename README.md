@@ -100,6 +100,16 @@ docker compose up -d                  # Postgres on :5433
 cd backend && uv run pytest           # coverage report included
 ```
 
+**Reminders**
+
+```bash
+cd backend
+uv run python -m app.reminders          # one pass; prints due/sent/failed/skipped
+```
+
+The API also runs this every `REMINDER_POLL_MINUTES` in-process. Both call the same
+function, so the command above is the deployed behaviour rather than a demo shortcut.
+
 **Health check**
 
 `GET /health` reports app, database, and storage reachability, returning `503` if any
@@ -118,6 +128,27 @@ of failing mid-clip. Frames are served `no-store` and held in memory for the lif
 viewer: they are protected health information, and a cached frame is a copy of someone's
 scan left on whatever machine played it.
 
+## Appointment reminders
+
+A reminder goes out `REMINDER_LEAD_HOURS` (default 24) before an appointment starts, to
+the patient's own address, for appointments still in a live status.
+
+Idempotency is a database constraint, not a scheduler setting. Before any mail is sent the
+job inserts a `reminder_sends` row for `(appointment_id, kind)`; the unique constraint lets
+exactly one caller through, and everyone else skips. Overlapping passes, a restarted
+container, and two API replicas all converge on one reminder — the job is safe to run as
+often as you like.
+
+Claiming *before* sending is deliberate. A crash between the two loses one reminder;
+the reverse order would send a second. The brief allows under-delivery inside its 99%
+target and allows no duplicates at all, so the ordering follows that. A send that Resend
+rejects is recorded `failed` with the error and is **not** retried automatically, for the
+same reason — rerun it deliberately once the cause is fixed.
+
+The message carries the appointment time and a portal link. No patient name, no clinician,
+no reason for the visit: the time is what makes a reminder work, and everything else would
+expose PHI to the email provider for nothing (see Security).
+
 ## Environment variables
 
 Every variable is documented with a placeholder in [`.env.example`](.env.example).
@@ -128,9 +159,10 @@ against a JWKS URL derived from `SUPABASE_URL`.
 
 ## Status
 
-Priority 1 and 2 are complete and deployed. 17 tables in committed migrations, applied to
-local Postgres and Supabase, with no-double-booking enforced by a partial unique index and
-proven by a mutation-checked concurrency test. Scheduling is the remaining feature block.
+All three priority tiers are feature-complete and deployed. 17 tables in committed
+migrations, applied to local Postgres and Supabase, with no-double-booking enforced by a
+partial unique index and proven by a mutation-checked concurrency test. Benchmarks and the
+demo remain.
 
 - [x] Repo scaffold, CI, health check, PHI-redacting logger
 - [x] Schema + migrations (17 tables, [docs/schema.md](docs/schema.md))
@@ -138,7 +170,8 @@ proven by a mutation-checked concurrency test. Scheduling is the remaining featu
 - [x] Priority 1 — identity verification, image viewing, cine playback, no cross-patient
       leakage (adversarial suite)
 - [x] Priority 2 — signed-report viewing and secure sharing with expiry and revocation
-- [ ] Priority 3 — availability, booking, concurrency guard, reminders
+- [x] Priority 3 — availability, booking, concurrency guard, lifecycle, reminders
+- [ ] Appointments and activity screens wired to the live APIs
 - [ ] Performance benchmarks (k6), demo video
 
 ## Priorities

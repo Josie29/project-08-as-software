@@ -144,3 +144,4 @@ class AuditAction(StrEnum):
     APPOINTMENT_CANCELLED = "appointment_cancelled"
     APPOINTMENT_STATUS_CHANGED = "appointment_status_changed"
     AVAILABILITY_CHANGED = "availability_changed"
+    REMINDER_DISPATCHED = "reminder_dispatched"

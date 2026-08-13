@@ -25,6 +25,24 @@ This link expires on its own and can be switched off by the person who sent it. 
 were not expecting this, you can ignore this message — no action is needed.
 """
 
+#: Reminders go to the patient's own address, not to a third party, so the appointment
+#: time is the patient's own information reaching them. It is included because a reminder
+#: without a time cannot reduce a no-show, which is the entire point of Core #15. Anything
+#: that would still be exposed to Resend needlessly is left out: no patient name, no
+#: clinician name, no reason for the visit, no account identifier.
+REMINDER_SUBJECT = "Reminder: your upcoming appointment"
+
+REMINDER_BODY_TEMPLATE = """This is a reminder of your upcoming appointment.
+
+When: {when}
+
+Details, rescheduling and cancellation are in your portal:
+{link}
+
+If you no longer need this appointment, please cancel it so the time can be offered to
+someone else.
+"""
+
 
 class EmailError(Exception):
     """Raised when a message could not be handed to the email provider."""
@@ -55,6 +73,40 @@ class EmailSender:
         Raises:
             EmailError: If the provider rejects the message or is unreachable.
         """
+        return await self._send(recipient, SHARE_SUBJECT, SHARE_BODY_TEMPLATE.format(link=link))
+
+    async def send_appointment_reminder(self, recipient: str, when: str, link: str) -> str | None:
+        """Send an appointment reminder to the patient.
+
+        Args:
+            recipient: The patient's own address.
+            when: The appointment time, already rendered in the clinic's timezone.
+            link: URL of the patient's portal.
+
+        Returns:
+            The provider's message id, or None if sending is not configured.
+
+        Raises:
+            EmailError: If the provider rejects the message or is unreachable.
+        """
+        return await self._send(
+            recipient, REMINDER_SUBJECT, REMINDER_BODY_TEMPLATE.format(when=when, link=link)
+        )
+
+    async def _send(self, recipient: str, subject: str, body: str) -> str | None:
+        """Hand one message to Resend.
+
+        Args:
+            recipient: Address to deliver to.
+            subject: Message subject.
+            body: Plain-text body.
+
+        Returns:
+            The provider's message id, or None if sending is not configured.
+
+        Raises:
+            EmailError: If the provider rejects the message or is unreachable.
+        """
         if not self._api_key:
             # Not configured: the caller still gets its link, and the absence is logged
             # rather than surfacing as a failed share.
@@ -64,8 +116,8 @@ class EmailSender:
         payload = {
             "from": self._from,
             "to": [recipient],
-            "subject": SHARE_SUBJECT,
-            "text": SHARE_BODY_TEMPLATE.format(link=link),
+            "subject": subject,
+            "text": body,
         }
         try:
             async with httpx.AsyncClient(timeout=_TIMEOUT_SECONDS) as client:

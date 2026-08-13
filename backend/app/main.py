@@ -3,6 +3,12 @@ from contextlib import asynccontextmanager
 from uuid import uuid4
 
 import structlog
+from apscheduler.schedulers.asyncio import (  # pyright: ignore[reportMissingTypeStubs]
+    AsyncIOScheduler,
+)
+from apscheduler.triggers.interval import (  # pyright: ignore[reportMissingTypeStubs]
+    IntervalTrigger,
+)
 from fastapi import FastAPI, Request, Response, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,13 +18,18 @@ from app.api import appointments, availability, cine, health, identity, reports,
 from app.config import get_settings
 from app.db import dispose_engine
 from app.logging import configure_logging
+from app.reminders import run_once
 
 logger = structlog.get_logger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
-    """Configure logging on startup and release database connections on shutdown.
+    """Configure logging, start the reminder job, and release resources on shutdown.
+
+    The reminder job runs in this process rather than as a separate service. It is safe to
+    run in every replica: each appointment is claimed through a unique constraint before
+    any mail is sent, so duplicate schedulers cannot produce duplicate reminders.
 
     Args:
         _app: The FastAPI application; unused.
@@ -27,8 +38,30 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
         Control back to the server for the lifetime of the application.
     """
     configure_logging()
-    logger.info("app.startup", env=get_settings().app_env)
+    settings = get_settings()
+    logger.info("app.startup", env=settings.app_env)
+
+    # APScheduler ships no type stubs, hence the per-rule suppressions on its imports and
+    # on `add_job` — narrowed to the rule rather than loosening strict mode for the file.
+    scheduler: AsyncIOScheduler | None = None
+    if settings.reminder_scheduler_enabled:
+        scheduler = AsyncIOScheduler()
+        scheduler.add_job(  # pyright: ignore[reportUnknownMemberType]
+            run_once,
+            trigger=IntervalTrigger(minutes=settings.reminder_poll_minutes),
+            id="dispatch_due_reminders",
+            # A slow pass must not stack up behind itself, and a missed tick is not worth
+            # replaying: the next pass finds the same appointments still due.
+            max_instances=1,
+            coalesce=True,
+        )
+        scheduler.start()
+        logger.info("reminder.scheduler_started", poll_minutes=settings.reminder_poll_minutes)
+
     yield
+
+    if scheduler is not None:
+        scheduler.shutdown(wait=False)
     await dispose_engine()
     logger.info("app.shutdown")
 
