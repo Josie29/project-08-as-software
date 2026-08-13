@@ -11,8 +11,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.jwt import SupabaseTokenVerifier, TokenError, get_token_verifier
 from app.db import get_db_session
-from app.models.identity import IdentityVerification, Patient
+from app.models.enums import StaffRole
+from app.models.identity import IdentityVerification, Patient, Staff
 from app.repositories.phi import PatientScope
+from app.repositories.scheduling import BookingScope, ProviderScope
 
 logger = structlog.get_logger(__name__)
 
@@ -35,6 +37,15 @@ class VerifiedPatient(BaseModel):
 
     auth_user_id: UUID
     patient_id: UUID
+
+
+class StaffMember(BaseModel):
+    """A clinician or front-desk admin, scoped to the one provider they act for."""
+
+    auth_user_id: UUID
+    staff_id: UUID
+    provider_id: UUID
+    role: StaffRole
 
 
 async def get_authenticated_user(
@@ -132,3 +143,84 @@ async def get_patient_scope(
     """
     request_id = getattr(request.state, "request_id", None)
     return PatientScope(session, patient.patient_id, request_id=request_id)
+
+
+async def get_booking_scope(
+    patient: Annotated[VerifiedPatient, Depends(get_verified_patient)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    request: Request,
+) -> BookingScope:
+    """Build the scheduling accessor for the verified caller.
+
+    Behind the same identity gate as imaging: an appointment names a provider and a time,
+    which is health information about the patient (brief: Security, Privacy & Compliance).
+
+    Args:
+        patient: The verified patient.
+        session: Request-scoped database session.
+        request: Used to correlate audit entries with the request log.
+
+    Returns:
+        A booking scope limited to this patient's appointments.
+    """
+    request_id = getattr(request.state, "request_id", None)
+    return BookingScope(session, patient.patient_id, request_id=request_id)
+
+
+async def get_staff_member(
+    user: Annotated[AuthenticatedUser, Depends(get_authenticated_user)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> StaffMember:
+    """Resolve the caller as staff for exactly one provider.
+
+    Staff skip the patient identity check — it verifies a caller against a clinical record
+    they own, which a clinician does not have. Their constraint is different and enforced
+    here instead: the resolved `provider_id` comes from the staff row, never from the
+    request, so a clinician cannot act for a colleague by changing a parameter.
+
+    Args:
+        user: The authenticated caller.
+        session: Request-scoped database session.
+
+    Returns:
+        The staff member and the provider they act for.
+
+    Raises:
+        HTTPException: 403 if the caller holds no staff record.
+    """
+    staff = await session.scalar(select(Staff).where(Staff.auth_user_id == user.auth_user_id))
+    if staff is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This area is for clinic staff.",
+        )
+    return StaffMember(
+        auth_user_id=user.auth_user_id,
+        staff_id=staff.id,
+        provider_id=staff.provider_id,
+        role=staff.role,
+    )
+
+
+async def get_provider_scope(
+    staff: Annotated[StaffMember, Depends(get_staff_member)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    request: Request,
+) -> ProviderScope:
+    """Build the schedule accessor for the caller's own provider.
+
+    Args:
+        staff: The resolved staff member.
+        session: Request-scoped database session.
+        request: Used to correlate audit entries with the request log.
+
+    Returns:
+        A scope limited to that provider's availability and appointments.
+    """
+    request_id = getattr(request.state, "request_id", None)
+    return ProviderScope(
+        session,
+        staff.provider_id,
+        actor_id=staff.staff_id,
+        request_id=request_id,
+    )

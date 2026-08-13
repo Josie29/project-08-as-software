@@ -69,6 +69,13 @@ class Settings(BaseSettings):
     identity_max_attempts: int = Field(default=5, ge=1)
     identity_lockout_minutes: int = Field(default=15, ge=1)
 
+    # How far ahead availability rules are materialised into bookable slot rows. Bounded
+    # because slots are real rows: an unbounded horizon would generate them forever.
+    slot_horizon_days: int = Field(default=60, ge=1, le=365)
+    # Minimum notice before an appointment starts for a patient to move or cancel it
+    # (Core #13). Enforced server-side; the UI hiding the button is not the guarantee.
+    booking_min_notice_hours: int = Field(default=24, ge=0, le=168)
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def _split_origins(cls, value: str | list[str]) -> list[str]:
