@@ -11,7 +11,8 @@ Major decisions only. Library-level choices are deferred — see Open sub-decisi
 | Data | Database | Supabase Postgres | Postgres row-locking is the concurrency primitive the brief requires, bundled free with auth and storage. |
 | Data | Auth | Supabase Auth | Argon2 hashing, session expiry, and JWT issuance are solved out of the box; FastAPI verifies the JWT and enforces RBAC itself. |
 | Data | Object storage | Supabase Storage | S3-compatible with time-limited signed URLs — the exact primitive secure share links need; 1 GB free covers mock frames. |
-| Infra | Backend hosting | Railway | Free tier runs a persistent Python process plus a separate cron/worker service for reminders. |
+| Backend | Reminder scheduler | APScheduler in-process, plus a CLI entrypoint | Correctness already lives in the `reminder_sends` unique constraint, so the scheduler is chosen on operability: no new service to configure, and `python -m app.reminders --once` fires the same code path on demand for the demo and for graders. |
+| Infra | Backend hosting | Railway | Free tier runs a persistent Python process, which is also what lets the reminder job poll in-process. |
 | Infra | Frontend hosting | Vercel | Free tier, first-party Next.js support, preview deploys per push. |
 | Infra | Email | Resend | Mandated by the brief; free tier covers reminders and share links. |
 
@@ -34,6 +35,9 @@ scripts.
 | ORM & migrations | SQLModel | Thin layer over SQLAlchemy with weaker async and locking ergonomics on the paths that matter most. |
 | ORM & migrations | Raw asyncpg | Maximum control over the locking query, but hand-rolling migrations burns timebox on a graded requirement. |
 | Architecture | Next.js route handlers only | One deploy and no CORS, but Vercel's free tier caps cron at once-daily, which makes reminder dispatch awkward. |
+| Reminder scheduler | Separate Railway cron service | Survives an API restart and separates concerns, but adds a service and env vars a grader must configure before the reminder flow works. |
+| Reminder scheduler | Supabase `pg_cron` | Fires even when the API is down, but needs `pg_net` or an Edge Function, moving the send path into SQL or Deno and outside the app's audit-writing and PHI log redaction. |
+| Reminder scheduler | GitHub Actions scheduled workflow | Free with visible run logs, but puts a production trigger in CI and requires exposing a secret-protected dispatch endpoint on a PHI application. |
 | Frontend framework | Vite + React SPA | Lighter, but forfeits server components and image optimization on the mobile-first viewer. |
 | Database | Neon | Fine Postgres, but pairing it with separate auth and blob vendors adds two integrations for no gain. |
 | Database | Railway Postgres | Colocated with the API, but no bundled auth or object storage. |
@@ -48,15 +52,12 @@ scripts.
 
 ## Open sub-decisions
 
-- **Cine/image delivery path** — signed URLs straight from Supabase Storage to the
-  browser (fast, but the audit log never sees the read) vs. proxying bytes through
-  FastAPI (every PHI read logged, but the API becomes the bandwidth bottleneck against
-  the <1 s time-to-first-frame target). Likely a hybrid; resolve when building Core #3/#4
-  and revisit under Stretch #16.
-- **Reminder scheduler** — in-process APScheduler vs. a separate Railway cron service vs.
-  Supabase `pg_cron`. Resolve when building Core #15; idempotency is enforced by a
-  persisted send record regardless of which wins.
-- **Test & CI toolchain** — pytest + httpx assumed for backend, Playwright for E2E, k6
-  for load. Pin versions and CI wiring at first commit.
-- **Cine manifest schema** — frame ordering, per-frame URLs, and the missing-frame
-  representation that Edge Case #2 needs. Resolve before Core #4.
+- ~~**Cine/image delivery path**~~ — resolved: proxied through FastAPI, not signed URLs
+  handed to the browser. Signed URLs are faster but the audit log never sees the read, and
+  the brief requires every PHI access recorded. The bandwidth cost that argued against
+  proxying was answered instead by a bundle endpoint (`GET /cine/{id}/frames`) that
+  returns a whole clip in one packed response rather than a hundred round trips.
+- **Reminder outage tolerance** — the in-process scheduler pauses while the API container
+  is down. At a 24-hour lead and a 15-minute poll that needs a roughly day-long outage to
+  miss a send, which the ≥99% target absorbs. Revisit only if the deployed uptime check
+  shows sustained gaps.
