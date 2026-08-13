@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.db import get_session_factory
+from app.reminders import run_forever, run_guarded
 from app.services.email import EmailError
 from app.services.reminders import dispatch_due_reminders, render_when
 from tests.scheduling.conftest import Clinic
@@ -220,6 +221,47 @@ async def test_a_cancelled_appointment_is_not_reminded(
     run = await dispatch_due_reminders(session, get_settings(), RecordingSender())  # pyright: ignore[reportArgumentType]
 
     assert run.due == 0
+
+
+async def test_a_failing_pass_does_not_kill_the_polling_loop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One bad pass — a database blip, a malformed row — must not end reminders for the
+    life of the process. Without the guard the task dies silently and no reminder goes out
+    again until someone restarts the container."""
+    calls = 0
+
+    async def _explode() -> None:
+        nonlocal calls
+        calls += 1
+        raise RuntimeError("database went away")
+
+    monkeypatch.setattr("app.reminders.run_once", _explode)
+
+    await run_guarded()
+    await run_guarded()
+
+    assert calls == 2
+
+
+async def test_the_polling_loop_stops_when_cancelled(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Shutdown has to actually stop the loop. A guard that swallowed CancelledError would
+    leave the task running against a disposed engine."""
+    passes = 0
+
+    async def _count() -> None:
+        nonlocal passes
+        passes += 1
+
+    monkeypatch.setattr("app.reminders.run_once", _count)
+
+    task = asyncio.create_task(run_forever(0.01))
+    await asyncio.sleep(0.05)
+    task.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert passes > 0
 
 
 def test_the_appointment_time_is_rendered_in_the_clinics_zone() -> None:

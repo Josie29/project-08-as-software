@@ -11,7 +11,7 @@ Major decisions only. Library-level choices are deferred — see Open sub-decisi
 | Data | Database | Supabase Postgres | Postgres row-locking is the concurrency primitive the brief requires, bundled free with auth and storage. |
 | Data | Auth | Supabase Auth | Argon2 hashing, session expiry, and JWT issuance are solved out of the box; FastAPI verifies the JWT and enforces RBAC itself. |
 | Data | Object storage | Supabase Storage | S3-compatible with time-limited signed URLs — the exact primitive secure share links need; 1 GB free covers mock frames. |
-| Backend | Reminder scheduler | APScheduler in-process, plus a CLI entrypoint | Correctness already lives in the `reminder_sends` unique constraint, so the scheduler is chosen on operability: no new service to configure, and `python -m app.reminders --once` fires the same code path on demand for the demo and for graders. |
+| Backend | Reminder scheduler | An `asyncio` task in the API process, plus a CLI entrypoint | Correctness already lives in the `reminder_sends` unique constraint, so the scheduler is chosen on operability: no new service to configure, and `python -m app.reminders` fires the same code path on demand for the demo and for graders. |
 | Infra | Backend hosting | Railway | Free tier runs a persistent Python process, which is also what lets the reminder job poll in-process. |
 | Infra | Frontend hosting | Vercel | Free tier, first-party Next.js support, preview deploys per push. |
 | Infra | Email | Resend | Mandated by the brief; free tier covers reminders and share links. |
@@ -35,6 +35,7 @@ scripts.
 | ORM & migrations | SQLModel | Thin layer over SQLAlchemy with weaker async and locking ergonomics on the paths that matter most. |
 | ORM & migrations | Raw asyncpg | Maximum control over the locking query, but hand-rolling migrations burns timebox on a graded requirement. |
 | Architecture | Next.js route handlers only | One deploy and no CORS, but Vercel's free tier caps cron at once-daily, which makes reminder dispatch awkward. |
+| Reminder scheduler | APScheduler | Built and then removed: two dependencies and three strict-mode suppressions (it ships no type stubs) to buy one feature a fifteen-line `asyncio` loop already provides. |
 | Reminder scheduler | Separate Railway cron service | Survives an API restart and separates concerns, but adds a service and env vars a grader must configure before the reminder flow works. |
 | Reminder scheduler | Supabase `pg_cron` | Fires even when the API is down, but needs `pg_net` or an Edge Function, moving the send path into SQL or Deno and outside the app's audit-writing and PHI log redaction. |
 | Reminder scheduler | GitHub Actions scheduled workflow | Free with visible run logs, but puts a production trigger in CI and requires exposing a secret-protected dispatch endpoint on a PHI application. |

@@ -26,6 +26,35 @@ async def run_once() -> ReminderRun:
         return await dispatch_due_reminders(session, settings, get_email_sender(settings))
 
 
+async def run_guarded() -> None:
+    """Run one pass, swallowing any failure so the polling loop survives it.
+
+    Broad by intention: this is the loop's supervisor. A malformed row or a database blip
+    must not end reminders for the life of the process, and there is nowhere above here to
+    report to. `CancelledError` inherits from `BaseException`, so shutdown still gets
+    through.
+    """
+    try:
+        await run_once()
+    except Exception:
+        logger.exception("reminder.pass_failed")
+
+
+async def run_forever(interval_seconds: float) -> None:
+    """Poll for due reminders until cancelled.
+
+    Sleeps first so a restarting container does not run a pass before it is serving, and
+    so a crash loop cannot turn into a send loop. Skipping a tick is harmless — the next
+    pass finds the same appointments still due.
+
+    Args:
+        interval_seconds: How long to wait between passes.
+    """
+    while True:
+        await asyncio.sleep(interval_seconds)
+        await run_guarded()
+
+
 async def _main() -> ReminderRun:
     """Run one pass and dispose the engine.
 
