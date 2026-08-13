@@ -83,35 +83,6 @@ export const MOCK_SHARES: MockShare[] = [
   },
 ];
 
-/** The patient's upcoming visit, shown in both time zones. */
-export const MOCK_APPOINTMENT = {
-  title: "Growth follow-up ultrasound · Dr Amara Lee",
-  whenPatient: "Wed Sep 2, 2026 · 10:30 AM CT",
-  whenClinic: "11:30 AM ET",
-  duration: "30 min",
-  location: "Suite 210",
-  changeBy: "Tue Sep 1, 10:30 AM CT",
-};
-
-/** One offerable slot. */
-export interface MockSlot {
-  patientTime: string;
-  clinicTime: string;
-  booked: boolean;
-  last?: boolean;
-}
-
-export const MOCK_SLOTS: MockSlot[] = [
-  { patientTime: "8:00 AM", clinicTime: "9:00 AM ET", booked: true },
-  { patientTime: "8:30 AM", clinicTime: "9:30 AM ET", booked: false },
-  { patientTime: "9:00 AM", clinicTime: "10:00 AM ET", booked: true },
-  { patientTime: "9:30 AM", clinicTime: "10:30 AM ET", booked: false },
-  { patientTime: "10:00 AM", clinicTime: "11:00 AM ET", booked: false },
-  { patientTime: "10:30 AM", clinicTime: "11:30 AM ET", booked: true },
-  { patientTime: "11:00 AM", clinicTime: "12:00 PM ET", booked: false },
-  { patientTime: "11:30 AM", clinicTime: "12:30 PM ET", booked: false, last: true },
-];
-
 /** One audit entry as the patient sees it. */
 export interface MockAuditRow {
   when: string;

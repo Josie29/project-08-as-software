@@ -171,7 +171,7 @@ demo remain.
       leakage (adversarial suite)
 - [x] Priority 2 — signed-report viewing and secure sharing with expiry and revocation
 - [x] Priority 3 — availability, booking, concurrency guard, lifecycle, reminders
-- [ ] Appointments and activity screens wired to the live APIs
+- [ ] Activity screen wired to a patient-scoped audit read API
 - [ ] Performance benchmarks (k6), demo video
 
 ## Priorities

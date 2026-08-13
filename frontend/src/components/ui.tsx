@@ -197,3 +197,20 @@ export function TextInput({
     />
   );
 }
+
+/** Select styled to match TextInput, including its tap-target height. */
+export function Select({
+  className = "",
+  ...props
+}: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <select
+      className={[
+        "min-h-[2.875rem] w-full rounded-md border border-line bg-panel-2 px-3.5 py-2.5",
+        "text-[0.9375rem] focus:border-brand focus:bg-panel",
+        className,
+      ].join(" ")}
+      {...props}
+    />
+  );
+}

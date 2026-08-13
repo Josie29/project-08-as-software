@@ -234,3 +234,76 @@ export async function getShares(): Promise<ShareRecord[] | null> {
     throw error;
   }
 }
+
+/** A clinician the patient can book with. */
+export interface ProviderSummary {
+  id: string;
+  display_name: string;
+  specialty: string | null;
+  timezone: string;
+}
+
+/** An open, future slot. */
+export interface SlotOffer {
+  id: string;
+  provider_id: string;
+  start_utc: string;
+  end_utc: string;
+}
+
+/** The lifecycle states an appointment can hold. */
+export type AppointmentStatus = "requested" | "confirmed" | "completed" | "cancelled" | "no_show";
+
+/** One of the patient's appointments, with the context needed to display it. */
+export interface AppointmentRecord {
+  id: string;
+  status: AppointmentStatus;
+  slot_id: string;
+  start_utc: string;
+  end_utc: string;
+  provider_id: string;
+  provider_name: string;
+  provider_timezone: string;
+  booked_at: string;
+  cancelled_at: string | null;
+  reason: string | null;
+}
+
+/**
+ * Fetch the clinicians the patient can book with.
+ *
+ * @returns Bookable providers, or null when identity verification is still required.
+ */
+export async function getProviders(): Promise<ProviderSummary[] | null> {
+  try {
+    return await apiFetch<ProviderSummary[]>("/providers");
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 403) return null;
+    throw error;
+  }
+}
+
+/**
+ * Fetch the patient's own appointments.
+ *
+ * @returns Their appointments, or null when identity verification is still required.
+ */
+export async function getAppointments(): Promise<AppointmentRecord[] | null> {
+  try {
+    return await apiFetch<AppointmentRecord[]>("/appointments");
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 403) return null;
+    throw error;
+  }
+}
+
+/**
+ * Fetch open slots for one provider.
+ *
+ * @param providerId - The clinician to search.
+ * @param days - How far ahead to look.
+ * @returns Open slots in chronological order.
+ */
+export async function getOpenSlots(providerId: string, days = 30): Promise<SlotOffer[]> {
+  return apiFetch<SlotOffer[]>(`/providers/${providerId}/slots?days=${days}`);
+}
