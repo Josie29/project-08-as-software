@@ -10,6 +10,46 @@ logger = structlog.get_logger(__name__)
 
 _TIMEOUT_SECONDS = 15.0
 
+#: Connection ceiling for the shared client.
+#:
+#: Sized from the worst case rather than the typical one: a cine bundle fans out 16 ways and
+#: concurrent viewers multiply that, so a ceiling near the fan-out turns the pool into a
+#: queue and gives back the handshake it saved. This value has not been tuned against a
+#: controlled measurement — see docs/benchmarks.md — it is reasoned from the fan-out.
+_MAX_CONNECTIONS = 256
+
+_client: httpx.AsyncClient | None = None
+
+
+def get_http_client() -> httpx.AsyncClient:
+    """Return the process-wide HTTP client used for storage reads.
+
+    Shared rather than per-request because a new client means a new TCP and TLS handshake
+    for every object. Measured against Supabase Storage that handshake costs ~134 ms per
+    object — on a 100-frame cine clip it was the single largest component of the request,
+    dwarfing the bytes themselves.
+
+    Returns:
+        The shared client, created on first use.
+    """
+    global _client
+    if _client is None:
+        _client = httpx.AsyncClient(
+            timeout=_TIMEOUT_SECONDS,
+            limits=httpx.Limits(
+                max_connections=_MAX_CONNECTIONS, max_keepalive_connections=_MAX_CONNECTIONS
+            ),
+        )
+    return _client
+
+
+async def close_http_client() -> None:
+    """Close the shared client and reset module state, for shutdown and test teardown."""
+    global _client
+    if _client is not None:
+        await _client.aclose()
+    _client = None
+
 
 class StorageError(Exception):
     """Raised when an object cannot be retrieved from object storage."""
@@ -27,7 +67,8 @@ class ObjectStorage:
     """Reads PHI objects from Supabase Storage using the service-role credentials.
 
     Bytes are proxied through the API rather than served by signed URL so that every read
-    passes the same authorization check and lands in the audit log.
+    passes the same authorization check and lands in the audit log. That choice costs a
+    round trip per object, which is why the client below is pooled rather than per-call.
     """
 
     def __init__(self, settings: Settings) -> None:
@@ -60,8 +101,7 @@ class ObjectStorage:
         """
         url = f"{self._base}/{self._bucket}/{path}"
         try:
-            async with httpx.AsyncClient(timeout=_TIMEOUT_SECONDS) as client:
-                response = await client.get(url, headers=self._headers)
+            response = await get_http_client().get(url, headers=self._headers)
         except httpx.HTTPError as exc:
             logger.warning("storage.unreachable", error=type(exc).__name__)
             raise StorageError("object storage is unavailable") from exc

@@ -24,6 +24,7 @@ from app.config import get_settings
 from app.db import dispose_engine
 from app.logging import configure_logging
 from app.reminders import run_forever
+from app.services.storage import close_http_client
 
 logger = structlog.get_logger(__name__)
 
@@ -64,6 +65,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
         # engine goes away underneath it.
         with suppress(asyncio.CancelledError):
             await reminders
+    await close_http_client()
     await dispose_engine()
     logger.info("app.shutdown")
 

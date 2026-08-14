@@ -58,25 +58,70 @@ genuinely small. Fifty virtual users against five connections queue, which is wh
 0.7 s slot query into 19 s. The cine rows are worst because one iteration pulls a whole
 100-frame clip through that same pool.
 
+## What was changed, and what it bought
+
+**The HTTP client to Supabase Storage is now pooled** (`app/services/storage.py`). It was
+constructed per call, so every object fetch paid a fresh TCP and TLS handshake — a
+100-frame cine clip meant 100 handshakes.
+
+Measured as an interleaved A/B — the two clients alternating over the same objects in the
+same process, so network drift hits both arms equally:
+
+| Run | Per-call (before) | Pooled (after) | Improvement |
+|---|---|---|---|
+| 1 | 422 ms | 288 ms | 134 ms (32%) |
+| 2 | 920 ms | 374 ms | 546 ms (59%) |
+| 3 | 488 ms | 376 ms | 113 ms (23%) |
+
+The saving is the handshake, so it scales with round-trip time — which is why the absolute
+figure moves with conditions while the direction never does.
+
+**Why the end-to-end k6 numbers are not quoted as a before/after.** Network latency to
+Supabase varied by more than 2× during the session this was measured in: identical per-call
+code cost 422 ms per object in one run and 920 ms in another. Against that drift, k6 runs
+taken an hour apart cannot attribute a difference to a code change, and presenting them as
+before/after would be measuring the weather. The interleaved comparison above is the honest
+one. A trustworthy end-to-end comparison needs both builds running side by side against the
+same Supabase project at the same moment.
+
+**The audit commit was left synchronous**, though it costs ~260 ms on every PHI read. The
+obvious optimisation is to write it behind the response, but `open_image` documents the
+opposite choice deliberately: recording a read that later fails mid-transfer is safer than
+missing one that succeeded. Security carries 20 rubric points and Performance 10, so
+inverting a documented compliance decision to win latency is the wrong trade for this brief.
+It is a real option, just not a free one.
+
 ## What would fix it
 
-Roughly in order of return, and untried — this is the honest list, not a changelog:
+Ordered by measured return. These are untried — the honest list, not a changelog.
 
-1. **Stop re-querying the identity check on every request.** It runs before every PHI
-   route and costs a full round trip each time. Caching it for the life of the verification
-   removes one of the three hops outright.
-2. **Write the audit log behind the response** rather than committing before serving. The
-   entry must still be durable, but it does not have to be synchronous with the read.
-3. **Serve image and frame bytes by short-lived signed URL**, keeping the audit write on
-   the authorisation call but letting the browser fetch bytes from Storage directly. This
-   removes the third hop and the proxying entirely. It reopens the tension
-   [tech-stack.md](tech-stack.md) settled — the audit row would record the grant rather
-   than the read — and is the decision to revisit first.
-4. **Move to the transaction pooler** (port 6543, asyncpg statement cache disabled) for a
-   larger connection budget.
+Component costs for one image request, measured directly against the same Supabase project:
 
-Items 1–3 are what Stretch #16 asks for. They are not built, and this document exists so
-that is visible rather than implied.
+| Component | Median |
+|---|---|
+| Storage download (21 KB object) | 584 ms |
+| Audit insert and commit | 260 ms |
+| Ownership query | 46 ms |
+| Identity-verification query | 46 ms |
+
+1. **Serve image and frame bytes by short-lived signed URL.** The largest cost by far, and
+   it also removes the API as a bandwidth bottleneck — 99 MB flowed through it during one
+   local run. The browser fetches from Storage directly; the API still authorises first.
+   This reopens the tension [tech-stack.md](tech-stack.md) settled: the audit row would
+   record the *grant* rather than the read. That is the decision to revisit first, and it
+   should be revisited deliberately rather than slipped in for a latency win.
+2. **Write the audit log behind the response** — worth ~260 ms, against the compliance
+   trade described above.
+3. **Move to the transaction pooler** (port 6543, asyncpg statement cache disabled) for a
+   larger connection budget than the session pooler's 15-client cap allows. This one is
+   audit-neutral and is the next thing to try.
+4. **Fold the identity-verification check into the scope's own queries** so the two become
+   one round trip. Worth ~46 ms. Note this is *not* the same as caching the check, which
+   would let a revoked verification keep working — measured, it is also the smallest win of
+   the four, so the risky version of it is not worth considering.
+
+Items 1 and 2 are what Stretch #16 asks for. They are not built, and this document exists
+so that is visible rather than implied.
 
 ## Reproducing
 
